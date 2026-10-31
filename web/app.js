@@ -62,7 +62,6 @@
     fNote: $('#fNote'),
     noteBlock: $('#noteBlock'),
     noteBody: $('#noteBody'),
-    notePeek: $('#notePeek'),
     btnDelete: $('#btnDelete'),
     mask: $('#mask'),
     importModal: $('#importModal'),
@@ -386,25 +385,28 @@
     el.progressBar.style.width = `${(sess.idx / total) * 100}%`;
   }
 
-  // 备注：写给自己看的注释，折叠收着，点一下才展开，
-  // 既不会混进答案，也不会在回忆时提前泄底。
+  // 备注：写给自己看的注释。折叠收在步骤下面、答案上面——
+  // 位置固定，不会被展开的答案挤到屏幕外；默认收起，不提前泄底。
   function renderNote(item) {
-    const note = item && item.note ? String(item.note).trim() : '';
-    if (!note) {
-      el.noteBlock.hidden = true;
-      el.noteBlock.open = false;
-      el.noteBlock.dataset.qid = '';
-      return;
-    }
-
     el.noteBlock.hidden = false;
+
+    // 换题就收起，免得上一题的注释留在下一题上
     if (el.noteBlock.dataset.qid !== item.id) {
       el.noteBlock.open = false;
       el.noteBlock.dataset.qid = item.id;
     }
 
-    const flat = note.replace(/\s+/g, ' ');
-    el.notePeek.textContent = flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
+    const note = item.note ? String(item.note).trim() : '';
+    if (!note) {
+      el.noteBlock.classList.add('is-empty');
+      el.noteBody.innerHTML =
+        `<div class="note-empty">这道题还没有备注。` +
+        `<button type="button" class="note-add" data-noteadd="${escapeHtml(item.id)}">写一条</button>` +
+        `</div>`;
+      return;
+    }
+
+    el.noteBlock.classList.remove('is-empty');
     el.noteBody.innerHTML = md(note);
     paint(el.noteBlock);
   }
@@ -1078,6 +1080,15 @@
   function bindEvents() {
     $$('.tab').forEach((t) => t.addEventListener('click', () => switchView(t.dataset.view)));
     $$('[data-goto]').forEach((b) => b.addEventListener('click', () => switchView(b.dataset.goto)));
+
+    // 备注为空时，点「写一条」直接开编辑抽屉并落到备注框
+    el.noteBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-noteadd]');
+      if (!btn) return;
+      e.preventDefault();
+      openDrawer(btn.dataset.noteadd);
+      setTimeout(() => el.fNote.focus(), 200);
+    });
 
 
     el.layers.addEventListener('click', (e) => {
