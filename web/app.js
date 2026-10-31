@@ -387,24 +387,15 @@
     }
     el.frameBlock.hidden = false;
 
-    // 一级 steps 只做「思路」，二级 labels 才是「答题步骤」。
-    // 两者数量本来就可能不一样，绝不下标配对。
-    const steps = stepsOf(item);
-    const idea = steps.length
-      ? `<div class="sk-row sk-idea"><span class="sk-flag">思路</span>${steps
-          .map((s) => `<span class="sk-word">${escapeHtml(s)}</span>`)
-          .join('<span class="sep">→</span>')}</div>`
-      : '';
-    const plan = labels
+    // 只显示二级的答题步骤。一级 steps 是「这类题怎么想」，属于选 Tag 时的参考，
+    // 放在答案上方既不对应任何段落，又和步骤相互干扰，所以不在背诵页出现。
+    el.skeleton.innerHTML = labels
       .map(
         (l, i) =>
           (i ? '<span class="sep">→</span>' : '') +
           `<span class="sk"><i>${i + 1}</i><b>${escapeHtml(l)}</b></span>`
       )
       .join('');
-
-    el.skeleton.innerHTML =
-      idea + `<div class="sk-row sk-steps"><span class="sk-flag">步骤</span>${plan}</div>`;
   }
 
   function renderLayers(item) {

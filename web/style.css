@@ -206,28 +206,13 @@ input, textarea, select { font-family: inherit; }
 .frame-block { margin-top: 22px; }
 
 .skeleton {
-  font-size: 13px;
-  line-height: 1.7;
-}
-.sk-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
+  line-height: 1.7;
 }
-.sk-row + .sk-row { margin-top: 7px; }
-.sk-flag {
-  flex: none;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: #a8a196;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0 5px;
-  line-height: 18px;
-}
-.sk-idea { color: #9b9488; }
-.sk-idea .sk-word { font-size: 12.5px; }
 .skeleton .sk {
   display: inline-flex;
   align-items: baseline;
