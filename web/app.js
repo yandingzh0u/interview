@@ -707,7 +707,7 @@
       return;
     }
 
-    el.segHint.textContent = `${labels.length} 段，跟着骨架走`;
+    el.segHint.textContent = `${labels.length} 段，只填要讲的，空着会跳过`;
 
     el.segEditor.innerHTML = labels
       .map(
