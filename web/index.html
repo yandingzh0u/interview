@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>背题</title>
+<link rel="stylesheet" href="/vendor/hljs-light.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="banner" id="banner" hidden></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="brand-name">背题</span></div>
+    <nav class="tabs">
+      <button class="tab is-active" data-view="review">背诵</button>
+      <button class="tab" data-view="bank">题库</button>
+    </nav>
+    <div class="topbar-right">
+      <span class="pos" id="posInfo"></span>
+      <span class="save-state" id="saveState"></span>
+      <button class="text-btn" id="btnFilter">筛选</button>
+
+      <div class="popover" id="filterPop" hidden>
+        <div class="pop-group">
+          <span class="pop-label">顺序</span>
+          <div class="pop-chips" id="orderChips">
+            <button class="chip is-active" data-order="seq">按录入</button>
+            <button class="chip" data-order="random">随机</button>
+          </div>
+        </div>
+        <div class="pop-group">
+          <span class="pop-label">一级 Tag</span>
+          <div class="pop-chips" id="catChips"></div>
+        </div>
+        <div class="pop-foot">
+          <button class="text-btn" id="btnResetFilter">重置</button>
+          <button class="primary-btn" id="btnApplyFilter">重新开始一轮</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="progress-track"><i id="progressBar"></i></div>
+
+<!-- ============ 背诵 ============ -->
+<main class="view is-active" id="view-review">
+  <div class="stage" id="stage">
+    <div class="q-meta" id="qMeta"></div>
+    <h1 class="q-text" id="qText"></h1>
+
+    <div class="frame-block" id="frameBlock">
+      <div class="skeleton" id="skeleton"></div>
+    </div>
+
+    <div class="layers" id="layers"></div>
+    <p class="hint" id="hint"></p>
+  </div>
+
+  <div class="empty" id="emptyState" hidden>
+    <p class="empty-title">题库还是空的</p>
+    <p class="empty-sub">去「题库」录第一道题，或者粘贴一段文本批量导入。</p>
+    <button class="primary-btn" data-goto="bank">去录入</button>
+  </div>
+
+  <div class="summary" id="summary" hidden></div>
+</main>
+
+<!-- ============ 题库 ============ -->
+<main class="view" id="view-bank">
+  <div class="bank">
+    <div class="bank-head">
+      <input class="search" id="searchInput" placeholder="搜索题目或答案…" autocomplete="off">
+      <button class="outline-btn" id="btnImport">批量导入</button>
+      <button class="primary-btn" id="btnNew">新建题目</button>
+    </div>
+    <div class="cat-filter" id="catFilter"></div>
+    <div class="bank-filters">
+      <button class="chip is-active" data-bankfilter="active">全部</button>
+      <button class="chip" data-bankfilter="new">没背过</button>
+      <button class="chip" data-bankfilter="empty">空白题</button>
+      <button class="chip" data-bankfilter="deleted">回收站</button>
+      <span class="bank-stat" id="bankStat"></span>
+    </div>
+    <div class="bank-list" id="bankList"></div>
+  </div>
+</main>
+
+<!-- ============ 编辑抽屉 ============ -->
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <span id="drawerTitle">新建题目</span>
+    <button class="icon-btn" id="drawerClose" title="关闭">✕</button>
+  </div>
+  <div class="drawer-body">
+    <label class="field">
+      <span class="field-label">题目</span>
+      <textarea id="fQ" rows="3" placeholder="面试官怎么问，就怎么写。可以换行"></textarea>
+    </label>
+
+    <div class="field">
+      <span class="field-label">一级 Tag <em>决定按什么顺序想</em></span>
+      <div class="picker" id="catPicker"></div>
+      <div class="skeleton-preview" id="skeletonPreview"></div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">二级问法 <em>决定每一步叫什么、哪步讲重</em></span>
+      <div class="picker" id="subPicker"></div>
+      <div class="focus-hint" id="focusHint"></div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">按骨架分段 <em id="segHint">选完二级问法自动生成</em></span>
+      <div class="seg-editor" id="segEditor"></div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">
+        追问链
+        <button type="button" class="mini-btn" id="btnAddFu">+ 加一条</button>
+      </span>
+      <div class="fu-editor" id="fuEditor"></div>
+    </div>
+
+  </div>
+  <div class="drawer-foot">
+    <button class="text-btn danger" id="btnDelete" hidden>删除</button>
+    <span class="spacer"></span>
+    <button class="text-btn" id="drawerCancel">取消</button>
+    <button class="primary-btn" id="drawerSave">保存<kbd>Ctrl↵</kbd></button>
+  </div>
+</aside>
+
+<!-- ============ 批量导入 ============ -->
+<div class="modal" id="importModal" hidden>
+  <div class="modal-box">
+    <h2 class="modal-title">批量导入</h2>
+    <p class="modal-sub">
+      每条题以 <code>Q:</code> 开头，字段各占一行。只有 <code>Q:</code> 是必填的，答案可以以后再补。<br>
+      <code>CAT:</code> 写「一级 / 二级」，比如 <code>设计实现 / 如何设计</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开。
+    </p>
+    <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: Agent 的上下文工程怎么设计？
+CAT: 设计实现 / 如何设计
+BRIEF: 先定目标约束，再按模块切分上下文，最后用验证兜底。
+A: 1. 目标约束：任务类型、上下文窗口、延迟预算
+2. 组成模块：系统提示 / 长期记忆 / 检索片段 / 工具返回
+3. 执行流程：装配 → 压缩 → 注入 → 校验
+FU: 压缩会不会丢关键信息？ | 看任务成功率，不看压缩率
+FU: 为什么不直接把整段对话塞进去？ | 成本和注意力稀释
+SRC: Agent 面试题
+TAGS: Agent, 上下文工程"></textarea>
+    <div class="modal-foot">
+      <span class="import-count" id="importCount"></span>
+      <span class="spacer"></span>
+      <button class="text-btn" id="importCancel">取消</button>
+      <button class="primary-btn" id="importConfirm">导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mask"></div>
+
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/highlight.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
