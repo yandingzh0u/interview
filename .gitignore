@@ -7,6 +7,10 @@ node_modules/
 *.log
 data/*.tmp
 
+# 运行时生成的恢复数据，不进仓库（本地留着才有用）
+data/backups/
+data/history.jsonl
+
 # 系统文件
 .DS_Store
 Thumbs.db

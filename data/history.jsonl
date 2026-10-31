@@ -1,8 +1,0 @@
-{"at":"2026-10-31T18:28:55+08:00","action":"create","item":{"id":"q_bckzhu","q":"保护机制自检题","cat":"解释原理","sub":"是什么","segments":["第一段","第二段"],"fu":[],"createdAt":"2026-10-31T18:28:55+08:00","updatedAt":"2026-10-31T18:28:55+08:00","deleted":false}}
-{"at":"2026-10-31T18:29:38+08:00","action":"create","item":{"id":"q_el5zt8","q":"什么是 RAG？","cat":"解释原理","sub":"是什么","segments":["RAG 全称 Retrieval-Augmented Generation，即检索增强生成，是一种将外部知识检索与大模型生成结合起来的技术架构","具体而言，在大模型生成答案之前，先从外部知识库中检索与用户问题相关的信息，再将这些信息作为上下文提供给大模型，让模型基于检索到的资料生成答案。"],"fu":[],"createdAt":"2026-10-31T18:29:38+08:00","updatedAt":"2026-10-31T18:29:38+08:00","deleted":false}}
-{"at":"2026-10-31T18:30:37+08:00","action":"create","item":{"id":"q_4dy2bd","q":"什么是 RAG？","cat":"解释原理","sub":"是什么","segments":["RAG 全称 Retrieval-Augmented Generation，即检索增强生成，是一种将外部知识检索与大模型生成结合起来的技术架构","具体而言，在大模型生成答案之前，先从外部知识库中检索与用户问题相关的信息，再将这些信息作为上下文提供给大模型，让模型基于检索到的资料生成答案。"],"fu":[],"createdAt":"2026-10-31T18:30:37+08:00","updatedAt":"2026-10-31T18:30:37+08:00","deleted":false}}
-{"at":"2026-10-31T18:31:02+08:00","action":"purge","item":{"id":"q_eeii7b"}}
-{"at":"2026-10-31T18:31:03+08:00","action":"purge","item":{"id":"q_mygu2l"}}
-{"at":"2026-10-31T18:31:03+08:00","action":"purge","item":{"id":"q_p9h3p4"}}
-{"at":"2026-10-31T18:31:03+08:00","action":"purge","item":{"id":"q_q2kvvq"}}
-{"at":"2026-10-31T18:31:03+08:00","action":"purge","item":{"id":"q_ppr155"}}
