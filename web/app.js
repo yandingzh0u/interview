@@ -463,7 +463,6 @@
       list = list.filter((x) => x.deleted);
     } else {
       list = list.filter((x) => !x.deleted);
-      if (state.bankFilter === 'new') list = list.filter((x) => x.rev.seen === 0);
       if (state.bankFilter === 'empty') list = list.filter((x) => isBlank(x));
     }
 
@@ -497,7 +496,6 @@
 
     el.bankList.innerHTML = list
       .map((x) => {
-        const seen = x.rev.seen ? `背过 ${x.rev.seen} 次` : '没背过';
         return `
           <div class="q-row ${x.deleted ? 'is-deleted' : ''}" data-id="${x.id}">
             <div class="q-row-main">
@@ -508,7 +506,6 @@
               <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
               <div class="q-row-meta">
                 ${isBlank(x) ? '<span class="blank">空白题</span>' : ''}
-                <span>${seen}</span>
               </div>
             </div>
           </div>`;
@@ -576,9 +573,6 @@
     if (!s || !item || !s.queue.length) return;
     if (s.idx >= s.queue.length - 1) return;
 
-    item.rev.seen += 1;
-    item.rev.lastAt = new Date().toISOString();
-
     s.idx += 1;
     state.step = 0;
 
@@ -611,7 +605,6 @@
       sub: item.sub,
       segments: item.segments,
       fu: item.fu,
-      rev: item.rev,
       deleted: item.deleted,
     };
     saveChain = saveChain

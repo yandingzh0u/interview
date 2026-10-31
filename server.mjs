@@ -55,7 +55,6 @@ function newId() {
 }
 
 function normalize(o) {
-  const rev = o.rev && typeof o.rev === 'object' ? o.rev : {};
   const fu = Array.isArray(o.fu)
     ? o.fu
         .map((x) =>
@@ -80,10 +79,6 @@ function normalize(o) {
     sub: typeof o.sub === 'string' ? o.sub.trim() : '',
     segments,
     fu,
-    rev: {
-      seen: Number(rev.seen) || 0,
-      lastAt: typeof rev.lastAt === 'string' ? rev.lastAt : '',
-    },
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : nowISO(),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : nowISO(),
     deleted: o.deleted === true,
@@ -266,8 +261,6 @@ const handler = async (req, res) => {
           sub: body.sub ?? prev.sub,
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
-          src: body.src ?? prev.src,
-          rev: body.rev ?? prev.rev,
           deleted: body.deleted ?? prev.deleted,
           createdAt: prev.createdAt,
           updatedAt: nowISO(),
