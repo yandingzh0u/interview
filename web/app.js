@@ -145,11 +145,6 @@
     return i < 0 ? 0 : i;
   }
 
-  function stepsOf(item) {
-    const c = findCat(item.cat);
-    return c && Array.isArray(c.steps) ? c.steps : [];
-  }
-
   // 这道题该用哪套分段标题：优先二级的 labels，退回一级的抽象步骤
   function labelsOf(item) {
     const sub = findSub(item.cat, item.sub);
@@ -772,12 +767,9 @@
 
     const sub = findSub(state.editCat, state.editSub);
     const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
-    const steps = stepsOf({ cat: state.editCat });
-    el.skeletonPreview.innerHTML =
-      `<div class="skp-row">思路：${steps.map(escapeHtml).join(' → ') || '—'}</div>` +
-      `<div class="skp-row is-main">步骤：${
-        labels.map((l, i) => `${i + 1} ${escapeHtml(l)}`).join(' → ') || '—'
-      }</div>`;
+    el.skeletonPreview.innerHTML = labels
+      .map((l, i) => `${i + 1} ${escapeHtml(l)}`)
+      .join(' → ');
     el.focusHint.textContent = sub && sub.focus ? `重点：${sub.focus}` : '';
 
     renderSegEditor();

@@ -703,8 +703,6 @@ kbd {
   padding: 8px 11px;
   line-height: 1.7;
 }
-.skp-row + .skp-row { margin-top: 2px; }
-.skp-row.is-main { color: #4b5259; }
 
 .focus-hint {
   margin-top: 9px;
