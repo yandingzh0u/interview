@@ -387,17 +387,24 @@
     }
     el.frameBlock.hidden = false;
 
+    // 一级 steps 只做「思路」，二级 labels 才是「答题步骤」。
+    // 两者数量本来就可能不一样，绝不下标配对。
     const steps = stepsOf(item);
-    el.skeleton.innerHTML = labels
-      .map((l, i) => {
-        const step = steps[i];
-        const body =
-          step && step !== l
-            ? `<b>${escapeHtml(step)}</b><em>（${escapeHtml(l)}）</em>`
-            : escapeHtml(l || step);
-        return (i ? '<span class="sep">→</span>' : '') + `<span class="sk"><i>${i + 1}</i>${body}</span>`;
-      })
+    const idea = steps.length
+      ? `<div class="sk-row sk-idea"><span class="sk-flag">思路</span>${steps
+          .map((s) => `<span class="sk-word">${escapeHtml(s)}</span>`)
+          .join('<span class="sep">→</span>')}</div>`
+      : '';
+    const plan = labels
+      .map(
+        (l, i) =>
+          (i ? '<span class="sep">→</span>' : '') +
+          `<span class="sk"><i>${i + 1}</i><b>${escapeHtml(l)}</b></span>`
+      )
       .join('');
+
+    el.skeleton.innerHTML =
+      idea + `<div class="sk-row sk-steps"><span class="sk-flag">步骤</span>${plan}</div>`;
   }
 
   function renderLayers(item) {
@@ -734,9 +741,11 @@
     const sub = findSub(state.editCat, state.editSub);
     const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
     const steps = stepsOf({ cat: state.editCat });
-    el.skeletonPreview.textContent = labels
-      .map((l, i) => (steps[i] ? `${steps[i]}（${l}）` : l))
-      .join(' → ');
+    el.skeletonPreview.innerHTML =
+      `<div class="skp-row">思路：${steps.map(escapeHtml).join(' → ') || '—'}</div>` +
+      `<div class="skp-row is-main">步骤：${
+        labels.map((l, i) => `${i + 1} ${escapeHtml(l)}`).join(' → ') || '—'
+      }</div>`;
     el.focusHint.textContent = sub && sub.focus ? `重点：${sub.focus}` : '';
 
     renderSegEditor();
@@ -744,26 +753,31 @@
 
   function renderSegEditor() {
     const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
+    // 段数取两者最大值：方法变短了，也要保住这道题原有的旧内容，不能截断
+    const n = Math.max(labels.length, state.editSegs.length);
 
-    if (!labels.length) {
+    if (!n) {
       el.segEditor.innerHTML = '<div class="focus-hint">这套骨架没有配置分段。</div>';
       el.segHint.textContent = '';
       return;
     }
 
-    el.segHint.textContent = `${labels.length} 段，只填要讲的，空着会跳过`;
+    const extra = n - labels.length;
+    el.segHint.textContent =
+      extra > 0
+        ? `这套方法有 ${labels.length} 步，下面还留着 ${extra} 段旧内容，可以并进去或删掉`
+        : `${labels.length} 段，只填要讲的，空着会跳过`;
 
-    el.segEditor.innerHTML = labels
-      .map(
-        (l, i) => `<div class="seg-row">
+    el.segEditor.innerHTML = Array.from({ length: n }, (_, i) => {
+      const l = labels[i] || `补充 ${i + 1}`;
+      return `<div class="seg-row">
           <div class="seg-head">
             <span class="seg-idx">${i + 1}</span>
             <span class="seg-label">${escapeHtml(l)}</span>
           </div>
           <textarea data-seg="${i}" rows="3" placeholder="写「${escapeHtml(l)}」这一段"></textarea>
-        </div>`
-      )
-      .join('');
+        </div>`;
+    }).join('');
 
     $$('[data-seg]', el.segEditor).forEach((t) => {
       const v = state.editSegs[Number(t.dataset.seg)];
@@ -794,12 +808,9 @@
       return;
     }
 
-    const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
-    const segs = [];
-    for (let i = 0; i < labels.length; i++) {
-      const node = el.segEditor.querySelector(`[data-seg="${i}"]`);
-      segs.push(node ? node.value : state.editSegs[i] || '');
-    }
+    // 按页面上实际存在的输入框收集，不按方法步数收集，避免旧内容被截断
+    const boxes = $$('[data-seg]', el.segEditor);
+    const segs = boxes.length ? boxes.map((node) => node.value) : state.editSegs.slice();
 
     const payload = {
       q,
