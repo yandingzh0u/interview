@@ -139,19 +139,17 @@
   <div class="modal-box">
     <h2 class="modal-title">批量导入</h2>
     <p class="modal-sub">
-      每条题以 <code>Q:</code> 开头，字段各占一行。只有 <code>Q:</code> 是必填的，答案可以以后再补。<br>
+      每条题以 <code>Q:</code> 开头，字段各占一行。<code>Q:</code> 必填，<code>CAT:</code> 建议填；答案用 <code>SEG:</code> 一行写一段，以后补也行。<br>
       <code>CAT:</code> 写「一级 / 二级」，比如 <code>设计实现 / 如何设计</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开。
     </p>
     <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: Agent 的上下文工程怎么设计？
 CAT: 设计实现 / 如何设计
-BRIEF: 先定目标约束，再按模块切分上下文，最后用验证兜底。
-A: 1. 目标约束：任务类型、上下文窗口、延迟预算
-2. 组成模块：系统提示 / 长期记忆 / 检索片段 / 工具返回
-3. 执行流程：装配 → 压缩 → 注入 → 校验
-FU: 压缩会不会丢关键信息？ | 看任务成功率，不看压缩率
-FU: 为什么不直接把整段对话塞进去？ | 成本和注意力稀释
-SRC: Agent 面试题
-TAGS: Agent, 上下文工程"></textarea>
+SEG: 先明确任务类型、上下文窗口和延迟预算。
+SEG: 按系统指令、任务状态、历史消息、工具结果四块装配。
+SEG: 每轮按当前任务重新装配模型输入。
+SEG: 超长时压缩历史，保留必要状态。
+SEG: 用任务完成率和上下文成本验证。
+FU: 压缩会不会丢关键信息？ | 看任务成功率，不看压缩率"></textarea>
     <div class="modal-foot">
       <span class="import-count" id="importCount"></span>
       <span class="spacer"></span>

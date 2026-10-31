@@ -80,12 +80,8 @@ function normalize(o) {
     sub: typeof o.sub === 'string' ? o.sub.trim() : '',
     segments,
     fu,
-    level: [1, 2, 3].includes(Number(o.level)) ? Number(o.level) : 2,
     rev: {
       seen: Number(rev.seen) || 0,
-      ok: Number(rev.ok) || 0,
-      box: Number(rev.box) || 0,
-      maxStage: Number(rev.maxStage) || 0,
       lastAt: typeof rev.lastAt === 'string' ? rev.lastAt : '',
     },
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : nowISO(),
@@ -196,10 +192,18 @@ async function serveStatic(res, urlPath) {
   } else {
     rel = urlPath === '/' ? 'index.html' : urlPath.slice(1);
   }
-  const full = path.join(baseDir, decodeURIComponent(rel));
+  let decoded;
+  try {
+    decoded = decodeURIComponent(rel);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Bad request');
+    return;
+  }
   const normBase = path.resolve(baseDir);
-  if (!path.resolve(full).startsWith(normBase)) {
-    res.writeHead(403).end('Forbidden');
+  const full = path.resolve(normBase, decoded);
+  const inside = path.relative(normBase, full);
+  if (inside.startsWith('..') || path.isAbsolute(inside)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Forbidden');
     return;
   }
   try {
@@ -263,7 +267,6 @@ const handler = async (req, res) => {
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
           src: body.src ?? prev.src,
-          level: body.level ?? prev.level,
           rev: body.rev ?? prev.rev,
           deleted: body.deleted ?? prev.deleted,
           createdAt: prev.createdAt,
@@ -279,7 +282,6 @@ const handler = async (req, res) => {
           segments: body.segments,
           fu: body.fu,
           src: body.src,
-          level: body.level ?? 2,
           createdAt: nowISO(),
           updatedAt: nowISO(),
         });

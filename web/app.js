@@ -227,9 +227,6 @@
     state.session = {
       queue,
       idx: 0,
-      round: 1,
-      missed: [],
-      stats: { 1: 0, 2: 0, 3: 0 },
       filter: { ...filter },
       startedAt: Date.now(),
       done: queue.length === 0,
@@ -340,7 +337,7 @@
     }
 
     const total = sess.queue.length;
-    el.posInfo.textContent = `${Math.min(sess.idx + 1, total)}/${total}${sess.round > 1 ? ` · 第 ${sess.round} 轮` : ''}`;
+    el.posInfo.textContent = `${Math.min(sess.idx + 1, total)}/${total}`;
     el.progressBar.style.width = `${(sess.idx / total) * 100}%`;
   }
 
@@ -356,9 +353,10 @@
     el.skeleton.innerHTML = labels
       .map((l, i) => {
         const step = steps[i];
-        const body = step
-          ? `<b>${escapeHtml(step)}</b><em>（${escapeHtml(l)}）</em>`
-          : escapeHtml(l);
+        const body =
+          step && step !== l
+            ? `<b>${escapeHtml(step)}</b><em>（${escapeHtml(l)}）</em>`
+            : escapeHtml(l || step);
         return (i ? '<span class="sep">→</span>' : '') + `<span class="sk"><i>${i + 1}</i>${body}</span>`;
       })
       .join('');
@@ -613,7 +611,6 @@
       sub: item.sub,
       segments: item.segments,
       fu: item.fu,
-      level: item.level,
       rev: item.rev,
       deleted: item.deleted,
     };
@@ -848,7 +845,7 @@
     };
 
     for (const raw of text.split(/\r?\n/)) {
-      const m = raw.match(/^\s*(Q|CAT|SUB|BRIEF|S|SEG|FU|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
+      const m = raw.match(/^\s*(Q|CAT|SUB|A|BRIEF|S|SEG|FU|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
       if (m) {
         const key = m[1].toUpperCase();
         const val = m[2];
@@ -869,9 +866,16 @@
           field = null;
         } else if (key === 'BRIEF') {
           field = null;
-        } else if (key === 'S' || key === 'SEG') {
+        } else if (key === 'S' || key === 'SEG' || key === 'A') {
           cur.segments.push(val);
           field = 'seg';
+        } else if (key === 'BRIEF') {
+          if (!cur.segments.length) {
+            cur.segments.push(val);
+            field = 'seg';
+          } else {
+            field = null;
+          }
         } else if (key === 'FU') {
           const [fq, fh] = val.split(/\s*\|\s*/);
           if (fq && fq.trim()) cur.fu.push({ q: fq.trim(), hint: (fh || '').trim() });
@@ -942,10 +946,12 @@
     const newIds = [];
     for (const p of fresh) {
       try {
+        const cat = p.cat || '解释原理';
+        const sub = p.sub || ((subsOf(cat)[0] || {}).id || '');
         const res = await api('/api/questions', {
           q: p.q,
-          cat: p.cat || '解释原理',
-          sub: p.sub,
+          cat,
+          sub,
           segments: p.segments,
           fu: p.fu,
           level: 2,
@@ -1165,5 +1171,6 @@
       renderReview();
     }
     if (p.has('edit')) openDrawer(p.get('edit') === 'new' ? null : p.get('edit'));
+    if (p.has('import')) openImport();
   });
 })();
