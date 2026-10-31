@@ -698,6 +698,11 @@
     el.drawer.classList.add('is-open');
     el.mask.classList.add('is-open');
     state.drawerDirty = false;
+    // 抽屉打开后才有真实布局，这时再量一次高度
+    setTimeout(() => {
+      autoGrow(el.fQ);
+      $$('[data-seg]', el.segEditor).forEach(autoGrow);
+    }, 130);
     setTimeout(() => el.fQ.focus(), 120);
   }
 
@@ -742,6 +747,14 @@
     renderSegEditor();
   }
 
+  // 输入框跟着内容长高，内部永远不出滚动条
+  function autoGrow(node) {
+    if (!node || node.tagName !== 'TEXTAREA') return;
+    node.style.height = 'auto';
+    // +6 留一点余量，最后一行不贴边；永远比刚好放下稍微长一点
+    node.style.height = Math.max(node.scrollHeight + 6, 96) + 'px';
+  }
+
   function renderSegEditor() {
     const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
     // 段数取两者最大值：方法变短了，也要保住这道题原有的旧内容，不能截断
@@ -773,6 +786,7 @@
     $$('[data-seg]', el.segEditor).forEach((t) => {
       const v = state.editSegs[Number(t.dataset.seg)];
       t.value = typeof v === 'string' ? v : '';
+      autoGrow(t);
     });
   }
 
@@ -1098,8 +1112,9 @@
     el.btnDelete.addEventListener('click', deleteFromDrawer);
     el.mask.addEventListener('click', () => closeDrawer());
     // 抽屉里任何输入都算「未保存」，关闭前要拦一下
-    el.drawer.addEventListener('input', () => {
+    el.drawer.addEventListener('input', (e) => {
       state.drawerDirty = true;
+      autoGrow(e.target);
     });
 
     el.catPicker.addEventListener('click', (e) => {

@@ -739,11 +739,21 @@ kbd {
   font-size: 13px;
   line-height: 1.8;
   color: var(--fg);
-  resize: vertical;
+  /* 不出现滚动条：高度跟着内容长 */
+  resize: none;
+  overflow: hidden;
+  min-height: 96px;
   transition: border-color 0.15s, background 0.15s;
 }
 .seg-row textarea:focus { outline: none; border-color: #b9cec4; background: #fff; }
 .seg-row textarea::placeholder { color: #c8c2b7; }
+
+/* 题目框同样跟内容长高，不出现滚动条 */
+#fQ {
+  resize: none;
+  overflow: hidden;
+  min-height: 96px;
+}
 
 /* 追问编辑 */
 .fu-editor { display: flex; flex-direction: column; gap: 8px; }
