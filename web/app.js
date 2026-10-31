@@ -25,6 +25,8 @@
 
   const el = {
     banner: $('#banner'),
+    offline: $('#offline'),
+    offlineRetry: $('#offlineRetry'),
     posInfo: $('#posInfo'),
     saveState: $('#saveState'),
     progressBar: $('#progressBar'),
@@ -133,6 +135,11 @@
   function findSub(catId, subId) {
     return subsOf(catId).find((s) => s.id === subId);
   }
+  // 一级 Tag 的序号（从 0 开始），用于配色和「1/5」角标
+  function catIndex(catId) {
+    const i = cats().findIndex((c) => c.id === catId);
+    return i < 0 ? 0 : i;
+  }
 
   function stepsOf(item) {
     const c = findCat(item.cat);
@@ -177,6 +184,8 @@
   async function loadAll() {
     try {
       const [fwRes, qRes] = await Promise.all([fetch('/api/frameworks'), fetch('/api/questions')]);
+      if (!qRes.ok) throw new Error('服务返回 ' + qRes.status);
+      hideOffline();
 
       if (fwRes.ok) {
         state.fw = await fwRes.json();
@@ -195,8 +204,36 @@
       restoreSession();
       renderAll();
     } catch (err) {
-      showBanner('读取题库失败：' + err.message);
+      // 连不上服务 ≠ 题库为空。这两种情况必须分开显示，否则会以为题目丢了。
+      showOffline();
     }
+  }
+
+  function showOffline() {
+    el.offline.hidden = false;
+  }
+
+  function hideOffline() {
+    el.offline.hidden = true;
+  }
+
+  function watchConnection() {
+    el.offlineRetry.addEventListener('click', () => {
+      loadAll();
+    });
+    setInterval(async () => {
+      try {
+        const r = await fetch('/api/questions', { cache: 'no-store' });
+        if (r.ok && !el.offline.hidden) {
+          hideOffline();
+          await loadAll();
+        } else if (!r.ok) {
+          showOffline();
+        }
+      } catch {
+        showOffline();
+      }
+    }, 8000);
   }
 
   function showBanner(text) {
@@ -316,8 +353,9 @@
     el.stage.hidden = false;
     el.summary.hidden = true;
 
+    const ci = catIndex(item.cat);
     el.qMeta.innerHTML =
-      `<span class="cat-chip">${escapeHtml(item.cat)}</span>` +
+      `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>` +
       (item.sub ? `<span class="sub-chip">${escapeHtml(item.sub)}</span>` : '');
 
     el.qText.textContent = item.q;
@@ -500,7 +538,7 @@
           <div class="q-row ${x.deleted ? 'is-deleted' : ''}" data-id="${x.id}">
             <div class="q-row-main">
               <div class="q-row-cat">
-                <span class="c">${escapeHtml(x.cat)}</span>
+                <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
                 ${x.sub ? `<span class="s">${escapeHtml(x.sub)}</span>` : ''}
               </div>
               <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
@@ -661,13 +699,19 @@
 
     el.drawer.classList.add('is-open');
     el.mask.classList.add('is-open');
+    state.drawerDirty = false;
     setTimeout(() => el.fQ.focus(), 120);
   }
 
-  function closeDrawer() {
+  function closeDrawer(force = false) {
+    if (!force && state.drawerDirty) {
+      if (!confirm('还没点「保存」，关掉就丢了。确定关闭？')) return false;
+    }
     el.drawer.classList.remove('is-open');
     el.mask.classList.remove('is-open');
     state.editing = null;
+    state.drawerDirty = false;
+    return true;
   }
 
   function renderCatPicker() {
@@ -777,7 +821,8 @@
         appendToQueue([res.item.id]);
       }
       setSaveState('已保存');
-      closeDrawer();
+      state.drawerDirty = false;
+      closeDrawer(true);
       renderAll();
     } catch (err) {
       setSaveState('保存失败：' + err.message, true);
@@ -796,7 +841,7 @@
       try {
         await api('/api/questions/purge', { id: item.id });
         state.items = state.items.filter((x) => x.id !== item.id);
-        closeDrawer();
+        closeDrawer(true);
         renderAll();
       } catch (err) {
         alert('删除失败：' + err.message);
@@ -807,7 +852,7 @@
     try {
       await api('/api/questions/delete', { id: item.id });
       item.deleted = true;
-      closeDrawer();
+      closeDrawer(true);
       renderAll();
     } catch (err) {
       alert('删除失败：' + err.message);
@@ -1045,11 +1090,15 @@
 
     // 抽屉
     $('#btnNew').addEventListener('click', () => openDrawer(null));
-    $('#drawerClose').addEventListener('click', closeDrawer);
-    $('#drawerCancel').addEventListener('click', closeDrawer);
+    $('#drawerClose').addEventListener('click', () => closeDrawer());
+    $('#drawerCancel').addEventListener('click', () => closeDrawer());
     $('#drawerSave').addEventListener('click', saveDrawer);
     el.btnDelete.addEventListener('click', deleteFromDrawer);
-    el.mask.addEventListener('click', closeDrawer);
+    el.mask.addEventListener('click', () => closeDrawer());
+    // 抽屉里任何输入都算「未保存」，关闭前要拦一下
+    el.drawer.addEventListener('input', () => {
+      state.drawerDirty = true;
+    });
 
     el.catPicker.addEventListener('click', (e) => {
       const b = e.target.closest('[data-cat]');
@@ -1150,6 +1199,7 @@
   }
 
   bindEvents();
+  watchConnection();
   loadAll().then(() => {
     // 调试参数（正常使用不会带）：?step=N 展开前 N 段 / ?view=bank 进题库 / ?edit=new 开录入 / ?dbg=1 关动画
     const p = new URLSearchParams(location.search);

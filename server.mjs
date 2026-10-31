@@ -117,13 +117,59 @@ async function loadBank() {
   loadErrors = errors;
 }
 
+// ---------- 防丢失三件套：事件流水 + 覆盖前快照 + 空列表熔断 ----------
+
+const HISTORY = path.join(DATA_DIR, 'history.jsonl');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const MAX_BACKUPS = 80;
+
+// 每一次增删改都追加一行完整记录。哪怕 bank.jsonl 被整表覆盖，也能从这里回放。
+async function appendHistory(action, item) {
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.appendFile(HISTORY, JSON.stringify({ at: nowISO(), action, item }) + '\n', 'utf8');
+  } catch (err) {
+    console.error('[history] 写入失败：', err.message);
+  }
+}
+
+// 每次覆盖题库前，先把当前文件另存一份
+async function backupCurrent() {
+  try {
+    const text = await fs.readFile(BANK, 'utf8');
+    if (!text.trim()) return;
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    const stamp = nowISO().replace(/[^0-9]/g, '').slice(0, 14);
+    const file = path.join(BACKUP_DIR, `bank-${stamp}.jsonl`);
+    await fs.writeFile(file, text, 'utf8');
+    const list = (await fs.readdir(BACKUP_DIR)).filter((f) => f.startsWith('bank-')).sort();
+    const drop = list.length - MAX_BACKUPS;
+    for (let i = 0; i < drop; i++) await fs.rm(path.join(BACKUP_DIR, list[i]), { force: true });
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('[backup] 失败：', err.message);
+  }
+}
+
 // 串行 + 原子写入：先写 .tmp 再 rename，避免半截文件
 let writeChain = Promise.resolve();
-function persist() {
-  const snapshot = items;
+function persist(opts = {}) {
+  const snapshot = items.slice(); // 拷贝快照，不持有引用
+  const allowEmpty = opts.allowEmpty === true;
   const run = async () => {
+    // 熔断：绝不用一个空列表去覆盖还有内容的题库
+    if (!snapshot.length && !allowEmpty) {
+      let old = '';
+      try {
+        old = await fs.readFile(BANK, 'utf8');
+      } catch {}
+      if (old.trim()) {
+        console.error('[熔断] 试图用空列表覆盖非空题库，已拒绝');
+        throw new Error('已拒绝：写入内容为空，但磁盘上还有题目。请检查后重试。');
+      }
+    }
     const text = snapshot.map((x) => JSON.stringify(x)).join('\n') + (snapshot.length ? '\n' : '');
     const tmp = BANK + '.tmp';
+    await backupCurrent();
     await fs.writeFile(tmp, text, 'utf8');
     await fs.rename(tmp, BANK);
     try {
@@ -239,6 +285,8 @@ const handler = async (req, res) => {
     }
 
     if (p === '/api/questions' && req.method === 'POST') {
+      // 关键：改之前先对齐磁盘。否则内存里的旧快照会把外部的改动整表覆盖掉。
+      await reloadIfChanged();
       const raw = await readBody(req);
       let body;
       try {
@@ -281,36 +329,107 @@ const handler = async (req, res) => {
         items.push(item);
       }
       await persist();
+      await appendHistory(body.id ? 'update' : 'create', item);
       return json(res, 200, { item });
     }
 
     if (p === '/api/questions/delete' && req.method === 'POST') {
+      await reloadIfChanged();
       const body = JSON.parse(await readBody(req));
       const it = items.find((x) => x.id === body.id);
       if (!it) return json(res, 404, { error: '题目不存在' });
       it.deleted = true;
       it.updatedAt = nowISO();
       await persist();
+      await appendHistory('delete', it);
       return json(res, 200, { ok: true });
     }
 
     if (p === '/api/questions/restore' && req.method === 'POST') {
+      await reloadIfChanged();
       const body = JSON.parse(await readBody(req));
       const it = items.find((x) => x.id === body.id);
       if (!it) return json(res, 404, { error: '题目不存在' });
       it.deleted = false;
       it.updatedAt = nowISO();
       await persist();
+      await appendHistory('restore', it);
       return json(res, 200, { ok: true });
     }
 
     if (p === '/api/questions/purge' && req.method === 'POST') {
+      await reloadIfChanged();
       const body = JSON.parse(await readBody(req));
       const before = items.length;
       items = items.filter((x) => x.id !== body.id);
       if (items.length === before) return json(res, 404, { error: '题目不存在' });
-      await persist();
+      await persist({ allowEmpty: true });
+      await appendHistory('purge', { id: body.id });
       return json(res, 200, { ok: true });
+    }
+
+    // ---------- 找回：列出 / 恢复历史快照 ----------
+    if (p === '/api/backups' && req.method === 'GET') {
+      let list = [];
+      try {
+        list = (await fs.readdir(BACKUP_DIR))
+          .filter((f) => f.startsWith('bank-') && f.endsWith('.jsonl'))
+          .sort()
+          .reverse();
+      } catch {}
+      const out = [];
+      for (const f of list.slice(0, 40)) {
+        try {
+          const text = await fs.readFile(path.join(BACKUP_DIR, f), 'utf8');
+          const rows = text.split(/\r?\n/).filter(Boolean);
+          out.push({ file: f, count: rows.length, bytes: Buffer.byteLength(text) });
+        } catch {}
+      }
+      return json(res, 200, { backups: out });
+    }
+
+    if (p === '/api/backups/restore' && req.method === 'POST') {
+      await reloadIfChanged();
+      const body = JSON.parse(await readBody(req));
+      const name = String(body.file || '');
+      // 只允许读 backups 目录里的 bank-*.jsonl，杜绝路径穿越
+      if (!/^bank-\d{14}\.jsonl$/.test(name)) return json(res, 400, { error: '文件名不合法' });
+      let text;
+      try {
+        text = await fs.readFile(path.join(BACKUP_DIR, name), 'utf8');
+      } catch {
+        return json(res, 404, { error: '快照不存在' });
+      }
+      const byId = new Map(items.map((x) => [x.id, x]));
+      let added = 0;
+      let filled = 0;
+      text.split(/\r?\n/).forEach((line) => {
+        const s = line.trim();
+        if (!s) return;
+        let o;
+        try {
+          o = JSON.parse(s);
+        } catch {
+          return;
+        }
+        if (!o || !o.q) return;
+        const rec = normalize(o);
+        const prev = byId.get(rec.id);
+        if (!prev) {
+          byId.set(rec.id, rec);
+          added++;
+          return;
+        }
+        // 现有的段落是空的、快照里有内容 → 用快照补回
+        if (!prev.segments.filter((x) => String(x).trim()).length && rec.segments.filter((x) => String(x).trim()).length) {
+          prev.segments = rec.segments;
+          filled++;
+        }
+      });
+      items = Array.from(byId.values());
+      await persist({ allowEmpty: true });
+      await appendHistory('restore-backup', { file: name, added, filled });
+      return json(res, 200, { ok: true, added, filled, total: items.length });
     }
 
     if (p === '/api/export' && req.method === 'GET') {
@@ -353,20 +472,30 @@ async function main() {
     lastMtimeMs = st.mtimeMs;
   } catch {}
   let server = null;
-  let port = 0;
-  for (let n = 0; n < 20; n++) {
-    const candidate = PORT_START + n;
-    try {
-      server = await listenOn(candidate);
-      port = candidate;
-      break;
-    } catch (err) {
-      if (err.code !== 'EADDRINUSE') throw err;
+  const port = PORT_START;
+  try {
+    server = await listenOn(port);
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      // 已经有实例在跑。绝不能退到 7789 再起一个 ——
+      // 两个实例各自在内存里握着一整份题库，谁后保存谁覆盖整个文件，题目就是这么丢的。
+      const url = `http://127.0.0.1:${port}/`;
+      console.log('');
+      console.log('  已经有一个背题服务在运行：' + url);
+      console.log('  直接用它就行，不再启动第二个（两个实例会互相覆盖题库）。');
+      console.log('');
+      if (!process.argv.includes('--no-open')) {
+        const cmd =
+          process.platform === 'win32'
+            ? `start "" "${url}"`
+            : process.platform === 'darwin'
+              ? `open "${url}"`
+              : `xdg-open "${url}"`;
+        exec(cmd, () => {});
+      }
+      return;
     }
-  }
-  if (!server) {
-    console.error('端口 7788-7807 都被占用了，无法启动。');
-    process.exit(1);
+    throw err;
   }
 
   const url = `http://127.0.0.1:${port}/`;

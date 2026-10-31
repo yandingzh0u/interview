@@ -164,13 +164,30 @@ input, textarea, select { font-family: inherit; }
   flex-wrap: wrap;
   min-height: 4px;
 }
+/* 一级 Tag 配色：--cat-fg / --cat-bg 由 .c0~.c4 提供 */
+.c0 { --cat-fg: #3b6ea5; --cat-bg: #e9eff7; }
+.c1 { --cat-fg: #6b5b95; --cat-bg: #eeebf6; }
+.c2 { --cat-fg: #2f6b57; --cat-bg: #e7f0ec; }
+.c3 { --cat-fg: #a3562f; --cat-bg: #f7ece5; }
+.c4 { --cat-fg: #2b6e7f; --cat-bg: #e6f0f3; }
+
 .cat-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 11.5px;
   letter-spacing: 0.04em;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--cat-fg, var(--accent));
+  background: var(--cat-bg, var(--accent-soft));
   padding: 3px 9px;
   border-radius: 5px;
+}
+.cat-chip i {
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 .sub-chip { font-size: 11.5px; color: #8f887c; letter-spacing: 0.03em; }
 
@@ -518,8 +535,8 @@ kbd {
 }
 .q-row-cat .c {
   font-size: 11px;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--cat-fg, var(--accent));
+  background: var(--cat-bg, var(--accent-soft));
   padding: 2px 7px;
   border-radius: 4px;
   letter-spacing: 0.03em;
@@ -925,4 +942,53 @@ kbd {
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---------- 断线提示：跟「题库为空」严格区分 ---------- */
+.offline {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(251, 250, 248, 0.94);
+  backdrop-filter: blur(3px);
+  padding: 24px;
+}
+.offline[hidden] { display: none; }
+
+.offline-box {
+  max-width: 420px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 30px 28px 26px;
+  box-shadow: 0 12px 40px rgba(31, 35, 40, 0.08);
+}
+.offline-title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--no);
+}
+.offline-sub {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.offline-how {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--sub);
+}
+.offline-how code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--line-soft);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
