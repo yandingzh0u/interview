@@ -65,6 +65,12 @@
     </div>
 
     <div class="layers" id="layers"></div>
+
+    <details class="note-block" id="noteBlock" hidden>
+      <summary><span class="note-tag">备注</span><span class="note-peek" id="notePeek"></span></summary>
+      <div class="note-body markdown" id="noteBody"></div>
+    </details>
+
     <p class="hint" id="hint"></p>
   </div>
 
@@ -133,6 +139,11 @@
       <div class="fu-editor" id="fuEditor"></div>
     </div>
 
+    <div class="field">
+      <span class="field-label">备注 <em>写给自己看的，不算答案</em></span>
+      <textarea id="fNote" rows="3" placeholder="哪里没懂、自己的理解、面试时想补一句的话…不会混进上面的答案"></textarea>
+    </div>
+
   </div>
   <div class="drawer-foot">
     <button class="text-btn danger" id="btnDelete" hidden>删除</button>
@@ -148,7 +159,7 @@
     <h2 class="modal-title">批量导入</h2>
     <p class="modal-sub">
       每条题以 <code>Q:</code> 开头，字段各占一行。<code>Q:</code> 必填，<code>CAT:</code> 建议填；答案用 <code>SEG:</code> 一行写一段，以后补也行。<br>
-      <code>CAT:</code> 写「一级 / 二级」，比如 <code>设计实现 / 如何设计</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开。
+      <code>CAT:</code> 写「一级 / 二级」，比如 <code>设计实现 / 如何设计</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开；备注用 <code>NOTE:</code>，可以接着写多行。
     </p>
     <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: Agent 的上下文工程怎么设计？
 CAT: 设计实现 / 如何设计

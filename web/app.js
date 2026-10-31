@@ -21,6 +21,7 @@
     editSub: '',
     editSegs: [],
     editFu: [],
+    editNote: '',
   };
 
   const el = {
@@ -58,6 +59,10 @@
     skeletonPreview: $('#skeletonPreview'),
     focusHint: $('#focusHint'),
     fuEditor: $('#fuEditor'),
+    fNote: $('#fNote'),
+    noteBlock: $('#noteBlock'),
+    noteBody: $('#noteBody'),
+    notePeek: $('#notePeek'),
     btnDelete: $('#btnDelete'),
     mask: $('#mask'),
     importModal: $('#importModal'),
@@ -374,9 +379,34 @@
       el.layers.dataset.count = '0';
     }
 
+    renderNote(item);
+
     const total = sess.queue.length;
     el.posInfo.textContent = `${Math.min(sess.idx + 1, total)}/${total}`;
     el.progressBar.style.width = `${(sess.idx / total) * 100}%`;
+  }
+
+  // 备注：写给自己看的注释，折叠收着，点一下才展开，
+  // 既不会混进答案，也不会在回忆时提前泄底。
+  function renderNote(item) {
+    const note = item && item.note ? String(item.note).trim() : '';
+    if (!note) {
+      el.noteBlock.hidden = true;
+      el.noteBlock.open = false;
+      el.noteBlock.dataset.qid = '';
+      return;
+    }
+
+    el.noteBlock.hidden = false;
+    if (el.noteBlock.dataset.qid !== item.id) {
+      el.noteBlock.open = false;
+      el.noteBlock.dataset.qid = item.id;
+    }
+
+    const flat = note.replace(/\s+/g, ' ');
+    el.notePeek.textContent = flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
+    el.noteBody.innerHTML = md(note);
+    paint(el.noteBlock);
   }
 
   function renderSkeleton(item) {
@@ -507,7 +537,7 @@
     const kw = state.search.trim().toLowerCase();
     if (kw) {
       list = list.filter((x) =>
-        [x.q, (x.segments || []).join(' ')]
+        [x.q, (x.segments || []).join(' '), x.note || '']
           .join('\n')
           .toLowerCase()
           .includes(kw)
@@ -542,6 +572,7 @@
               <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
               <div class="q-row-meta">
                 ${isBlank(x) ? '<span class="blank">空白题</span>' : ''}
+                ${x.note && x.note.trim() ? '<span class="has-note">备注</span>' : ''}
               </div>
             </div>
           </div>`;
@@ -682,6 +713,8 @@
     const item = state.editing;
     el.drawerTitle.textContent = item ? (item.deleted ? '查看题目（已删除）' : '编辑题目') : '新建题目';
     el.fQ.value = item ? item.q : '';
+    el.fNote.value = item ? item.note || '' : '';
+    state.editNote = el.fNote.value;
 
     state.editCat = item ? item.cat : cats()[0] ? cats()[0].id : '解释原理';
     state.editSub = item ? item.sub : (subsOf(state.editCat)[0] || {}).id || '';
@@ -701,6 +734,7 @@
     // 抽屉打开后才有真实布局，这时再量一次高度
     setTimeout(() => {
       autoGrow(el.fQ);
+      autoGrow(el.fNote);
       $$('[data-seg]', el.segEditor).forEach(autoGrow);
     }, 130);
     setTimeout(() => el.fQ.focus(), 120);
@@ -823,6 +857,7 @@
       sub: state.editSub,
       segments: segs,
       fu: state.editFu.filter((f) => f.q.trim()),
+      note: el.fNote.value.trim(),
     };
     if (state.editing) payload.id = state.editing.id;
 
@@ -899,13 +934,13 @@
     };
 
     for (const raw of text.split(/\r?\n/)) {
-      const m = raw.match(/^\s*(Q|CAT|SUB|A|BRIEF|S|SEG|FU|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
+      const m = raw.match(/^\s*(Q|CAT|SUB|A|BRIEF|S|SEG|FU|NOTE|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
       if (m) {
         const key = m[1].toUpperCase();
         const val = m[2];
         if (key === 'Q') {
           flush();
-          cur = { q: val, cat: '', sub: '', segments: [], fu: [] };
+          cur = { q: val, cat: '', sub: '', segments: [], fu: [], note: '' };
           field = 'q';
           continue;
         }
@@ -934,6 +969,9 @@
           const [fq, fh] = val.split(/\s*\|\s*/);
           if (fq && fq.trim()) cur.fu.push({ q: fq.trim(), hint: (fh || '').trim() });
           field = null;
+        } else if (key === 'NOTE') {
+          cur.note = cur.note ? cur.note + '\n' + val : val;
+          field = 'note';
         } else if (key === 'SRC' || key === 'SOURCE' || key === 'TAGS') {
           field = null;
         }
@@ -1008,6 +1046,7 @@
           sub,
           segments: p.segments,
           fu: p.fu,
+          note: p.note || '',
           level: 2,
         });
         state.items.push(res.item);
@@ -1199,6 +1238,13 @@
     }
     if (!state.session || state.session.done) return;
 
+    // N：展开 / 收起备注。手在键盘上时不用去摸鼠标。
+    if ((e.key === 'n' || e.key === 'N') && !el.noteBlock.hidden) {
+      e.preventDefault();
+      el.noteBlock.open = !el.noteBlock.open;
+      return;
+    }
+
     if (e.code === 'Space' || e.key === ' ') {
       e.preventDefault();
       advance();
@@ -1232,5 +1278,6 @@
     }
     if (p.has('edit')) openDrawer(p.get('edit') === 'new' ? null : p.get('edit'));
     if (p.has('import')) openImport();
+    if (p.has('note')) el.noteBlock.open = true;
   });
 })();

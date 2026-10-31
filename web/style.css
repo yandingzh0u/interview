@@ -748,8 +748,9 @@ kbd {
 .seg-row textarea:focus { outline: none; border-color: #b9cec4; background: #fff; }
 .seg-row textarea::placeholder { color: #c8c2b7; }
 
-/* 题目框同样跟内容长高，不出现滚动条 */
-#fQ {
+/* 题目框、备注框同样跟内容长高，不出现滚动条 */
+#fQ,
+#fNote {
   resize: none;
   overflow: hidden;
   min-height: 96px;
@@ -1003,4 +1004,74 @@ kbd {
   background: var(--line-soft);
   padding: 1px 5px;
   border-radius: 4px;
+}
+
+/* ---------- 备注：写给自己看的注释 ---------- */
+.note-block {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.note-block[hidden] { display: none; }
+
+.note-block summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  user-select: none;
+}
+.note-block summary::-webkit-details-marker { display: none; }
+.note-block summary::before {
+  content: '▸';
+  display: inline-block;
+  font-size: 10px;
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+.note-block[open] summary::before { transform: rotate(90deg); }
+.note-block summary:hover { color: var(--sub); }
+
+.note-tag {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #8a7a5c;
+  background: #f7f1e4;
+  border-radius: 4px;
+  padding: 1px 6px;
+  line-height: 17px;
+}
+.note-peek {
+  font-size: 12px;
+  color: #b6afa2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.note-block[open] .note-peek { display: none; }
+
+.note-body {
+  margin-top: 10px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--sub);
+  background: #fdfbf6;
+  border-left: 2px solid #e8dfcd;
+  border-radius: 0 8px 8px 0;
+  word-break: break-word;
+}
+.note-body > :first-child { margin-top: 0; }
+.note-body > :last-child { margin-bottom: 0; }
+
+.q-row-meta .has-note {
+  font-size: 11px;
+  color: #8a7a5c;
+  background: #f7f1e4;
+  border-radius: 4px;
+  padding: 1px 6px;
 }
