@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
 const BANK = path.join(DATA_DIR, 'bank.jsonl');
+const FRAMEWORKS = path.join(DATA_DIR, 'frameworks.json');
 const WEB_DIR = path.join(ROOT, 'web');
 const VENDOR_DIR = path.join(ROOT, 'vendor');
 const PORT_START = 7788;
@@ -31,6 +32,8 @@ const MIME = {
 // ---------- 内存中的题库 ----------
 let items = [];
 let loadErrors = [];
+let tagFixed = []; // 载入时按 aliases 自动改名对齐的题
+let tagIssues = []; // 二级 Tag 对不上任何一项、要人工重选的题
 
 function nowISO() {
   const d = new Date();
@@ -86,6 +89,59 @@ function normalize(o) {
   };
 }
 
+// ---------- 骨架配置：二级 Tag 的唯一真相源 ----------
+// 题库里每条记录只存「一级 / 二级」两个字符串，名字一改，老题就挂空了。
+// 所以改名的历史写在 frameworks.json 的 aliases 里，载入时自动对齐，不用手动改题库。
+
+let fw = { categories: [] };
+let fwMtimeMs = -1;
+
+async function loadFrameworks(force = false) {
+  try {
+    const st = await fs.stat(FRAMEWORKS);
+    if (!force && st.mtimeMs === fwMtimeMs) return fw;
+    const text = await fs.readFile(FRAMEWORKS, 'utf8');
+    fw = JSON.parse(text);
+    fwMtimeMs = st.mtimeMs;
+  } catch (err) {
+    // 配置读不出来时宁可不校验，也不能拦住录题
+    if (force) throw err;
+    console.error('[frameworks] 读取失败，本轮不校验标签：', err.message);
+  }
+  return fw;
+}
+
+function catOf(id) {
+  return (fw.categories || []).find((c) => c.id === id) || null;
+}
+
+function subIdsOf(catId) {
+  const c = catOf(catId);
+  return c && Array.isArray(c.subtypes) ? c.subtypes.map((s) => s.id) : [];
+}
+
+// 命中当前名字 → 不动；命中 aliases → 换成新名字；都不命中 → ok:false，由调用方决定怎么办
+function resolveTag(cat, sub) {
+  const catId = typeof cat === 'string' && cat.trim() ? cat.trim() : '解释原理';
+  const want = typeof sub === 'string' ? sub.trim() : '';
+  const ids = subIdsOf(catId);
+  if (!ids.length) return { cat: catId, sub: want, moved: false, ok: true };
+  if (ids.includes(want)) return { cat: catId, sub: want, moved: false, ok: true };
+  const c = catOf(catId);
+  const mapped = (c && c.aliases ? c.aliases[want] : '') || '';
+  if (mapped && ids.includes(mapped)) return { cat: catId, sub: mapped, moved: true, ok: true };
+  return { cat: catId, sub: want, moved: false, ok: false };
+}
+
+function tagError(tag) {
+  const valid = subIdsOf(tag.cat).join(' / ');
+  return (
+    `二级 Tag「${tag.sub || '空'}」不在「${tag.cat}」下面了` +
+    (valid ? `（现在可选：${valid}）` : '') +
+    '。刷新页面后重新选一次再保存。'
+  );
+}
+
 async function loadBank() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   let text = '';
@@ -96,12 +152,17 @@ async function loadBank() {
       await fs.writeFile(BANK, '', 'utf8');
       items = [];
       loadErrors = [];
+      tagFixed = [];
+      tagIssues = [];
       return;
     }
     throw err;
   }
+  await loadFrameworks();
   const parsed = [];
   const errors = [];
+  const fixed = [];
+  const issues = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const s = line.trim();
     if (!s) return;
@@ -109,13 +170,23 @@ async function loadBank() {
       const o = JSON.parse(s);
       if (!o || typeof o !== 'object') throw new Error('不是 JSON 对象');
       if (!o.q || !String(o.q).trim()) throw new Error('缺少 q 字段');
-      parsed.push(normalize(o));
+      const item = normalize(o);
+      const tag = resolveTag(item.cat, item.sub);
+      if (tag.moved) {
+        fixed.push({ id: item.id, q: item.q, from: item.sub, to: tag.sub });
+        item.sub = tag.sub;
+      } else if (!tag.ok) {
+        issues.push({ id: item.id, q: item.q, cat: item.cat, sub: item.sub });
+      }
+      parsed.push(item);
     } catch (err) {
       errors.push({ line: i + 1, msg: err.message });
     }
   });
   items = parsed;
   loadErrors = errors;
+  tagFixed = fixed;
+  tagIssues = issues;
 }
 
 // ---------- 防丢失三件套：事件流水 + 覆盖前快照 + 空列表熔断 ----------
@@ -269,7 +340,9 @@ const handler = async (req, res) => {
   try {
     if (p === '/api/frameworks' && req.method === 'GET') {
       try {
-        const text = await fs.readFile(path.join(DATA_DIR, 'frameworks.json'), 'utf8');
+        const text = await fs.readFile(FRAMEWORKS, 'utf8');
+        fw = JSON.parse(text); // 顺便刷新缓存：写接口校验用的就是这一份
+        fwMtimeMs = (await fs.stat(FRAMEWORKS)).mtimeMs;
         res.writeHead(200, {
           'Content-Type': 'application/json; charset=utf-8',
           'Cache-Control': 'no-store',
@@ -282,7 +355,12 @@ const handler = async (req, res) => {
 
     if (p === '/api/questions' && req.method === 'GET') {
       await reloadIfChanged();
-      return json(res, 200, { items, errors: loadErrors });
+      return json(res, 200, {
+        items,
+        errors: loadErrors,
+        tagFixed,
+        tagIssues,
+      });
     }
 
     if (p === '/api/questions' && req.method === 'POST') {
@@ -297,17 +375,20 @@ const handler = async (req, res) => {
       }
       const q = String(body.q ?? '').trim();
       if (!q) return json(res, 400, { error: '题目不能为空' });
+      await loadFrameworks();
 
       let item;
       if (body.id) {
         const idx = items.findIndex((x) => x.id === body.id);
         if (idx === -1) return json(res, 404, { error: '题目不存在' });
         const prev = items[idx];
+        const tag = resolveTag(body.cat ?? prev.cat, body.sub ?? prev.sub);
+        if (!tag.ok) return json(res, 400, { error: tagError(tag) });
         item = normalize({
           ...prev,
           q,
-          cat: body.cat ?? prev.cat,
-          sub: body.sub ?? prev.sub,
+          cat: tag.cat,
+          sub: tag.sub,
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
           note: body.note ?? prev.note,
@@ -318,10 +399,12 @@ const handler = async (req, res) => {
         item.id = prev.id;
         items[idx] = item;
       } else {
+        const tag = resolveTag(body.cat, body.sub);
+        if (!tag.ok) return json(res, 400, { error: tagError(tag) });
         item = normalize({
           q,
-          cat: body.cat,
-          sub: body.sub,
+          cat: tag.cat,
+          sub: tag.sub,
           segments: body.segments,
           fu: body.fu,
           note: body.note,
@@ -507,6 +590,14 @@ async function main() {
   console.log('  ' + url);
   console.log(`  题库：${BANK}`);
   console.log(`  共 ${items.length} 道题${loadErrors.length ? `（${loadErrors.length} 行格式错误已跳过）` : ''}`);
+  if (tagFixed.length) {
+    console.log(`  已按 aliases 对齐 ${tagFixed.length} 道题的旧标签名：`);
+    for (const f of tagFixed.slice(0, 10)) console.log(`    ${f.from} → ${f.to}　${f.q.slice(0, 20)}`);
+  }
+  if (tagIssues.length) {
+    console.log(`  有 ${tagIssues.length} 道题的二级 Tag 已失效，需要重新选：`);
+    for (const it of tagIssues.slice(0, 10)) console.log(`    ${it.cat} / ${it.sub}　${it.q.slice(0, 20)}`);
+  }
   console.log('');
   console.log('  关闭这个窗口 = 停止服务（题库已存盘，不会丢）');
   console.log('');

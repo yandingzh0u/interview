@@ -137,7 +137,13 @@
     return c ? c.subtypes : [];
   }
   function findSub(catId, subId) {
-    return subsOf(catId).find((s) => s.id === subId);
+    const subs = subsOf(catId);
+    const hit = subs.find((s) => s.id === subId);
+    if (hit) return hit;
+    // 老题可能还挂着改名前的名字，按 aliases 认一下
+    const c = findCat(catId);
+    const mapped = (c && c.aliases ? c.aliases[subId] : '') || '';
+    return mapped ? subs.find((s) => s.id === mapped) || null : null;
   }
   // 一级 Tag 的序号（从 0 开始），用于配色和「1/5」角标
   function catIndex(catId) {
@@ -145,12 +151,12 @@
     return i < 0 ? 0 : i;
   }
 
-  // 这道题该用哪套分段标题：优先二级的 labels，退回一级的抽象步骤
+  // 这道题该用哪套分段标题：只用二级的 labels。一级原来那套「思路」已经整个去掉了，
+  // 找不到就返回空，让分段退化成「补充 N」，不要拿别的东西顶上去。
   function labelsOf(item) {
     const sub = findSub(item.cat, item.sub);
     if (sub && Array.isArray(sub.labels) && sub.labels.length) return sub.labels;
-    const c = findCat(item.cat);
-    return c && Array.isArray(c.steps) ? c.steps : [];
+    return [];
   }
 
   // ---------------- 层：骨架的每一段就是一层 ----------------
@@ -194,12 +200,25 @@
 
       const data = await qRes.json();
       state.items = data.items || [];
+      const notes = [];
       if (data.errors && data.errors.length) {
         const sample = data.errors.slice(0, 3).map((e) => `第 ${e.line} 行：${e.msg}`).join('；');
-        showBanner(
+        notes.push(
           `bank.jsonl 有 ${data.errors.length} 行无法解析，已跳过。${sample}。如果在记事本里改过，请确认保存为 UTF-8 编码。`
         );
       }
+      if (data.tagFixed && data.tagFixed.length) {
+        const pairs = [...new Set(data.tagFixed.map((f) => `${f.from} → ${f.to}`))].join('、');
+        notes.push(`有 ${data.tagFixed.length} 道题还挂着旧标签名，已自动对齐到现在的名字（${pairs}）。`);
+      }
+      if (data.tagIssues && data.tagIssues.length) {
+        const sample = data.tagIssues
+          .slice(0, 3)
+          .map((x) => `${x.cat} / ${x.sub || '空'}「${x.q.slice(0, 12)}」`)
+          .join('、');
+        notes.push(`有 ${data.tagIssues.length} 道题的二级 Tag 对不上现在的方法（${sample}），打开编辑重选一次就能修好。`);
+      }
+      if (notes.length) showBanner(notes.join(' '));
       restoreSession();
       renderAll();
     } catch (err) {
@@ -414,8 +433,8 @@
     }
     el.frameBlock.hidden = false;
 
-    // 只显示二级的答题步骤。一级 steps 是「这类题怎么想」，属于选 Tag 时的参考，
-    // 放在答案上方既不对应任何段落，又和步骤相互干扰，所以不在背诵页出现。
+    // 只显示二级的答题步骤。一级那套「思路」已经从配置和界面里整个去掉，
+    // 现在页面上任何位置都不该再出现它。
     el.skeleton.innerHTML = labels
       .map(
         (l, i) =>
@@ -713,8 +732,12 @@
     el.fNote.value = item ? item.note || '' : '';
     state.editNote = el.fNote.value;
 
-    state.editCat = item ? item.cat : cats()[0] ? cats()[0].id : '解释原理';
-    state.editSub = item ? item.sub : (subsOf(state.editCat)[0] || {}).id || '';
+    // 一级 / 二级都要对齐到当前配置：老题如果挂着改名前的名字，这里自动落到新名字上。
+    // 不这么做的话二级一个都不会高亮，保存时又把这个错名字写回去了。
+    const catOk = item && findCat(item.cat) ? item.cat : (cats()[0] || {}).id || '解释原理';
+    const subMeta = item ? findSub(catOk, item.sub) : null;
+    state.editCat = catOk;
+    state.editSub = subMeta ? subMeta.id : (subsOf(catOk)[0] || {}).id || '';
     state.editSegs = item ? (item.segments || []).slice() : [];
     state.editFu = item ? item.fu.map((f) => ({ ...f })) : [];
 
@@ -1032,8 +1055,9 @@
     const newIds = [];
     for (const p of fresh) {
       try {
-        const cat = p.cat || '解释原理';
-        const sub = p.sub || ((subsOf(cat)[0] || {}).id || '');
+        const cat = p.cat && findCat(p.cat) ? p.cat : (cats()[0] || {}).id || '解释原理';
+        const subMeta = findSub(cat, p.sub);
+        const sub = subMeta ? subMeta.id : (subsOf(cat)[0] || {}).id || '';
         const res = await api('/api/questions', {
           q: p.q,
           cat,

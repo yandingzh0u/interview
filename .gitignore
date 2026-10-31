@@ -15,3 +15,6 @@ data/history.jsonl
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 临时截图（验证用的，不进仓库）
+_*.png
