@@ -29,6 +29,7 @@
     offline: $('#offline'),
     offlineRetry: $('#offlineRetry'),
     posInfo: $('#posInfo'),
+    filterState: $('#filterState'),
     saveState: $('#saveState'),
     progressBar: $('#progressBar'),
     viewReview: $('#view-review'),
@@ -314,12 +315,28 @@
     const alive = new Set(aliveItems().map((x) => x.id));
     if (!s.queue.every((id) => alive.has(id))) return;
     state.session = s;
-    if (s.filter) {
-      state.filter = {
-        cat: s.filter.cat || '',
-        order: s.filter.order || 'seq',
-      };
-    }
+    state.filter = {
+      cat: (s.filter && s.filter.cat) || '',
+      order: (s.filter && s.filter.order) || 'seq',
+    };
+    syncQueueWithItems();
+  }
+
+  // 存档里的队列是上次打开时的快照，之后新录的题不在里面。
+  // 每次渲染主页都按当前题库补一次，缺了就补回来——否则主页会一直少一道，刷新也不出现。
+  function syncQueueWithItems() {
+    const sess = state.session;
+    if (!sess || sess.done) return;
+    const want = buildQueue(sess.filter);
+    const have = new Set(sess.queue);
+    const missing = want.filter((id) => !have.has(id));
+    if (!missing.length) return;
+    const currentId = sess.queue[sess.idx];
+    // 按录入顺序时直接按当前题库重建（顺序不变）；随机模式不动已有顺序，补在末尾
+    sess.queue = sess.filter.order === 'random' ? sess.queue.concat(missing) : want;
+    const at = sess.queue.indexOf(currentId);
+    sess.idx = at < 0 ? 0 : at;
+    persistSession();
   }
 
   function currentItem() {
@@ -337,8 +354,20 @@
     renderFilterPopover();
   }
 
+  // 顶部那个「只看 xxx」：一级 Tag 筛选生效时必须看得见。
+  // 不然题库里 4 道、主页只走 3 道，会以为题目丢了。
+  function renderFilterState() {
+    const cat = (state.filter && state.filter.cat) || '';
+    el.filterState.hidden = !cat || state.view !== 'review';
+    el.filterState.innerHTML = cat
+      ? `只看 ${escapeHtml(cat)}<button type="button" data-fclear title="取消筛选，回到全部题目">✕</button>`
+      : '';
+  }
+
   function renderReview() {
     if (state.view !== 'review') return;
+
+    renderFilterState();
 
     if (aliveItems().length === 0) {
       el.stage.hidden = true;
@@ -353,6 +382,7 @@
 
     if (!state.session) newSession(state.filter);
     if (!state.session || state.session.done) return renderSummary();
+    syncQueueWithItems();
 
     const sess = state.session;
     let item = currentItem();
@@ -713,6 +743,7 @@
     } else {
       el.posInfo.textContent = '';
       el.progressBar.style.width = '0';
+      renderFilterState();
       renderCatFilter();
       renderBank();
     }
@@ -1139,6 +1170,14 @@
       renderFilterPopover();
     });
     $('#btnApplyFilter').addEventListener('click', applyFilter);
+
+    // 点顶部那个「只看 xxx ✕」就取消筛选，回到全部题目
+    el.filterState.addEventListener('click', (e) => {
+      if (!e.target.closest('[data-fclear]')) return;
+      state.filter = { ...state.filter, cat: '' };
+      renderFilterPopover();
+      applyFilter();
+    });
 
     document.addEventListener('click', (e) => {
       if (!el.filterPop.hidden && !el.filterPop.contains(e.target) && e.target.id !== 'btnFilter') {
