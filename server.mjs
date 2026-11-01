@@ -262,7 +262,14 @@ async function reloadIfChanged() {
   } catch {
     return;
   }
-  if (st.mtimeMs === lastMtimeMs) return;
+  let fwChanged = false;
+  try {
+    const fs2 = await fs.stat(FRAMEWORKS);
+    // 改了骨架配置（改名、合并、改段标题）也要重新对齐一次，
+    // 否则内存里还挂着旧 Tag 名，要等重启才生效。
+    fwChanged = fs2.mtimeMs !== fwMtimeMs;
+  } catch {}
+  if (st.mtimeMs === lastMtimeMs && !fwChanged) return;
   await loadBank();
   lastMtimeMs = st.mtimeMs;
 }
