@@ -58,7 +58,6 @@
     catPicker: $('#catPicker'),
     subPicker: $('#subPicker'),
     skeletonPreview: $('#skeletonPreview'),
-    focusHint: $('#focusHint'),
     fuEditor: $('#fuEditor'),
     fNote: $('#fNote'),
     noteBlock: $('#noteBlock'),
@@ -819,12 +818,10 @@
       )
       .join('');
 
-    const sub = findSub(state.editCat, state.editSub);
     const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
     el.skeletonPreview.innerHTML = labels
       .map((l, i) => `${i + 1} ${escapeHtml(l)}`)
       .join(' → ');
-    el.focusHint.textContent = sub && sub.focus ? `重点：${sub.focus}` : '';
 
     renderSegEditor();
   }
