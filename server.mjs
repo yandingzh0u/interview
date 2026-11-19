@@ -115,7 +115,7 @@ function catIds() {
 }
 
 function defaultCat() {
-  return catIds()[0] || '概念与原理';
+  return catIds()[0] || '概念原理';
 }
 
 // 命中当前名字 → 不动；命中旧二级或 aliases → 换成新名字；都不命中 → ok:false，由调用方决定怎么办

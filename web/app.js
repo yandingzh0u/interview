@@ -138,7 +138,7 @@
     const aliases = (state.fw && state.fw.aliases) || {};
     const mapped = (rawSub && aliases[rawSub]) || (rawCat && aliases[rawCat]) || '';
     if (mapped && findCat(mapped)) return mapped;
-    return (cats()[0] || {}).id || '概念与原理';
+    return (cats()[0] || {}).id || '概念原理';
   }
   // 答题类型的序号（从 0 开始），用于配色和「1」角标
   function catIndex(catId) {
@@ -747,7 +747,7 @@
     state.editNote = el.fNote.value;
 
     // 答题类型对齐到当前配置：老题如果挂着旧名字，自动按 aliases 落到新名字上。
-    state.editCat = item ? resolveCatId(item.cat, item.sub) : (cats()[0] || {}).id || '概念与原理';
+    state.editCat = item ? resolveCatId(item.cat, item.sub) : (cats()[0] || {}).id || '概念原理';
     state.editSegs = fitSegments(item ? item.segments : [], labelsOf({ cat: state.editCat }).length);
     state.editFu = item ? item.fu.map((f) => ({ ...f })) : [];
 
