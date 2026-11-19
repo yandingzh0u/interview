@@ -42,7 +42,7 @@
           </div>
         </div>
         <div class="pop-group">
-          <span class="pop-label">一级 Tag</span>
+          <span class="pop-label">答题类型</span>
           <div class="pop-chips" id="catChips"></div>
         </div>
         <div class="pop-foot">
@@ -116,18 +116,13 @@
     </label>
 
     <div class="field">
-      <span class="field-label">一级 Tag <em>选大类，决定下面有哪些问法</em></span>
+      <span class="field-label">答题类型 <em>决定固定分段</em></span>
       <div class="picker" id="catPicker"></div>
       <div class="skeleton-preview" id="skeletonPreview"></div>
     </div>
 
     <div class="field">
-      <span class="field-label">二级问法 <em>决定每一步叫什么</em></span>
-      <div class="picker" id="subPicker"></div>
-    </div>
-
-    <div class="field">
-      <span class="field-label">按骨架分段 <em id="segHint">选完二级问法自动生成</em></span>
+      <span class="field-label">按骨架分段 <em id="segHint">选完答题类型自动生成</em></span>
       <div class="seg-editor" id="segEditor"></div>
     </div>
 
@@ -159,16 +154,13 @@
     <h2 class="modal-title">批量导入</h2>
     <p class="modal-sub">
       每条题以 <code>Q:</code> 开头，字段各占一行。<code>Q:</code> 必填，<code>CAT:</code> 建议填；答案用 <code>SEG:</code> 一行写一段，以后补也行。<br>
-      <code>CAT:</code> 写「一级 / 二级」，比如 <code>设计实现 / 如何设计</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开；备注用 <code>NOTE:</code>，可以接着写多行。
+      <code>CAT:</code> 填 7 套答题类型之一，比如 <code>方案与治理</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开；备注用 <code>NOTE:</code>，可以接着写多行。
     </p>
-    <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: Agent 的上下文工程怎么设计？
-CAT: 设计实现 / 如何设计
-SEG: 先明确任务类型、上下文窗口和延迟预算。
-SEG: 按系统指令、任务状态、历史消息、工具结果四块装配。
-SEG: 每轮按当前任务重新装配模型输入。
-SEG: 超长时压缩历史，保留必要状态。
-SEG: 用任务完成率和上下文成本验证。
-FU: 压缩会不会丢关键信息？ | 看任务成功率，不看压缩率"></textarea>
+    <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: 如何规避 RAG 系统中大模型的幻觉？
+CAT: 方案与治理
+SEG: RAG 里的幻觉主要有两类：一是检索没召回，二是召回了模型自行推断。
+SEG: 一是在 Rerank 后卡阈值，二是 Prompt 硬约束，三是要求带引用编号，四是生成后核查。
+FU: 怎么量化幻觉率？ | 用大模型把回答拆成陈述句，逐句对照原文核验（Faithfulness）"></textarea>
     <div class="modal-foot">
       <span class="import-count" id="importCount"></span>
       <span class="spacer"></span>

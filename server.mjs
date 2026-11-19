@@ -33,7 +33,7 @@ const MIME = {
 let items = [];
 let loadErrors = [];
 let tagFixed = []; // 载入时按 aliases 自动改名对齐的题
-let tagIssues = []; // 二级 Tag 对不上任何一项、要人工重选的题
+let tagIssues = []; // 答题类型对不上任何一项、要人工重选的题
 
 function nowISO() {
   const d = new Date();
@@ -78,8 +78,7 @@ function normalize(o) {
   return {
     id: typeof o.id === 'string' && o.id ? o.id : newId(),
     q: typeof o.q === 'string' ? o.q : String(o.q ?? ''),
-    cat: typeof o.cat === 'string' && o.cat.trim() ? o.cat.trim() : '解释原理',
-    sub: typeof o.sub === 'string' ? o.sub.trim() : '',
+    cat: typeof o.cat === 'string' && o.cat.trim() ? o.cat.trim() : defaultCat(),
     segments,
     fu,
     note: typeof o.note === 'string' ? o.note : '',
@@ -89,11 +88,11 @@ function normalize(o) {
   };
 }
 
-// ---------- 骨架配置：二级 Tag 的唯一真相源 ----------
-// 题库里每条记录只存「一级 / 二级」两个字符串，名字一改，老题就挂空了。
-// 所以改名的历史写在 frameworks.json 的 aliases 里，载入时自动对齐，不用手动改题库。
+// ---------- 骨架配置：答题类型的唯一真相源 ----------
+// 题库里每条记录只存一个答题类型 cat。改名或迁移的历史写在 frameworks.json 的 aliases 里，
+// 载入时自动对齐，不用担心老题或历史备份挂空。
 
-let fw = { categories: [] };
+let fw = { categories: [], aliases: {} };
 let fwMtimeMs = -1;
 
 async function loadFrameworks(force = false) {
@@ -111,32 +110,38 @@ async function loadFrameworks(force = false) {
   return fw;
 }
 
-function catOf(id) {
-  return (fw.categories || []).find((c) => c.id === id) || null;
+function catIds() {
+  return (fw.categories || []).map((c) => c.id);
 }
 
-function subIdsOf(catId) {
-  const c = catOf(catId);
-  return c && Array.isArray(c.subtypes) ? c.subtypes.map((s) => s.id) : [];
+function defaultCat() {
+  return catIds()[0] || '概念与原理';
 }
 
-// 命中当前名字 → 不动；命中 aliases → 换成新名字；都不命中 → ok:false，由调用方决定怎么办
+// 命中当前名字 → 不动；命中旧二级或 aliases → 换成新名字；都不命中 → ok:false，由调用方决定怎么办
 function resolveTag(cat, sub) {
-  const catId = typeof cat === 'string' && cat.trim() ? cat.trim() : '解释原理';
-  const want = typeof sub === 'string' ? sub.trim() : '';
-  const ids = subIdsOf(catId);
-  if (!ids.length) return { cat: catId, sub: want, moved: false, ok: true };
-  if (ids.includes(want)) return { cat: catId, sub: want, moved: false, ok: true };
-  const c = catOf(catId);
-  const mapped = (c && c.aliases ? c.aliases[want] : '') || '';
-  if (mapped && ids.includes(mapped)) return { cat: catId, sub: mapped, moved: true, ok: true };
-  return { cat: catId, sub: want, moved: false, ok: false };
+  const rawCat = typeof cat === 'string' ? cat.trim() : '';
+  const rawSub = typeof sub === 'string' ? sub.trim() : '';
+  const ids = catIds();
+  const def = defaultCat();
+  if (!ids.length) return { cat: rawCat || def, moved: false, ok: true };
+  if (!rawCat && !rawSub) return { cat: def, moved: false, ok: true };
+  if (ids.includes(rawCat)) return { cat: rawCat, moved: false, ok: true };
+  if (rawSub && ids.includes(rawSub)) {
+    return { cat: rawSub, moved: true, from: rawCat ? `${rawCat} / ${rawSub}` : rawSub, ok: true };
+  }
+  const aliases = (fw && fw.aliases) || {};
+  const mapped = (rawSub && aliases[rawSub]) || (rawCat && aliases[rawCat]) || '';
+  if (mapped && ids.includes(mapped)) {
+    return { cat: mapped, moved: true, from: rawSub ? `${rawCat} / ${rawSub}` : rawCat, ok: true };
+  }
+  return { cat: rawCat || rawSub, moved: false, ok: false };
 }
 
 function tagError(tag) {
-  const valid = subIdsOf(tag.cat).join(' / ');
+  const valid = catIds().join(' / ');
   return (
-    `二级 Tag「${tag.sub || '空'}」不在「${tag.cat}」下面了` +
+    `答题类型「${tag.cat || '空'}」不在当前骨架列表里` +
     (valid ? `（现在可选：${valid}）` : '') +
     '。刷新页面后重新选一次再保存。'
   );
@@ -170,13 +175,12 @@ async function loadBank() {
       const o = JSON.parse(s);
       if (!o || typeof o !== 'object') throw new Error('不是 JSON 对象');
       if (!o.q || !String(o.q).trim()) throw new Error('缺少 q 字段');
-      const item = normalize(o);
-      const tag = resolveTag(item.cat, item.sub);
+      const tag = resolveTag(o.cat, o.sub);
+      const item = normalize({ ...o, cat: tag.cat });
       if (tag.moved) {
-        fixed.push({ id: item.id, q: item.q, from: item.sub, to: tag.sub });
-        item.sub = tag.sub;
+        fixed.push({ id: item.id, q: item.q, from: tag.from, to: tag.cat });
       } else if (!tag.ok) {
-        issues.push({ id: item.id, q: item.q, cat: item.cat, sub: item.sub });
+        issues.push({ id: item.id, q: item.q, cat: item.cat });
       }
       parsed.push(item);
     } catch (err) {
@@ -389,13 +393,12 @@ const handler = async (req, res) => {
         const idx = items.findIndex((x) => x.id === body.id);
         if (idx === -1) return json(res, 404, { error: '题目不存在' });
         const prev = items[idx];
-        const tag = resolveTag(body.cat ?? prev.cat, body.sub ?? prev.sub);
+        const tag = resolveTag(body.cat ?? prev.cat, body.sub);
         if (!tag.ok) return json(res, 400, { error: tagError(tag) });
         item = normalize({
           ...prev,
           q,
           cat: tag.cat,
-          sub: tag.sub,
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
           note: body.note ?? prev.note,
@@ -411,11 +414,9 @@ const handler = async (req, res) => {
         item = normalize({
           q,
           cat: tag.cat,
-          sub: tag.sub,
           segments: body.segments,
           fu: body.fu,
           note: body.note,
-          src: body.src,
           createdAt: nowISO(),
           updatedAt: nowISO(),
         });
@@ -506,7 +507,8 @@ const handler = async (req, res) => {
           return;
         }
         if (!o || !o.q) return;
-        const rec = normalize(o);
+        const tag = resolveTag(o.cat, o.sub);
+        const rec = normalize({ ...o, cat: tag.ok ? tag.cat : defaultCat() });
         const prev = byId.get(rec.id);
         if (!prev) {
           byId.set(rec.id, rec);
@@ -602,8 +604,8 @@ async function main() {
     for (const f of tagFixed.slice(0, 10)) console.log(`    ${f.from} → ${f.to}　${f.q.slice(0, 20)}`);
   }
   if (tagIssues.length) {
-    console.log(`  有 ${tagIssues.length} 道题的二级 Tag 已失效，需要重新选：`);
-    for (const it of tagIssues.slice(0, 10)) console.log(`    ${it.cat} / ${it.sub}　${it.q.slice(0, 20)}`);
+    console.log(`  有 ${tagIssues.length} 道题的答题类型已失效，需要重新选：`);
+    for (const it of tagIssues.slice(0, 10)) console.log(`    ${it.cat}　${it.q.slice(0, 20)}`);
   }
   console.log('');
   console.log('  关闭这个窗口 = 停止服务（题库已存盘，不会丢）');

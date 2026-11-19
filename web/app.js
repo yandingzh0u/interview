@@ -18,7 +18,6 @@
     search: '',
     editing: null,
     editCat: '',
-    editSub: '',
     editSegs: [],
     editFu: [],
     editNote: '',
@@ -56,7 +55,6 @@
     segEditor: $('#segEditor'),
     segHint: $('#segHint'),
     catPicker: $('#catPicker'),
-    subPicker: $('#subPicker'),
     skeletonPreview: $('#skeletonPreview'),
     fuEditor: $('#fuEditor'),
     fNote: $('#fNote'),
@@ -130,32 +128,28 @@
     return (state.fw && state.fw.categories) || [];
   }
   function findCat(id) {
-    return cats().find((c) => c.id === id);
+    return cats().find((c) => c.id === id) || null;
   }
-  function subsOf(catId) {
-    const c = findCat(catId);
-    return c ? c.subtypes : [];
+  function resolveCatId(cat, sub) {
+    const rawCat = typeof cat === 'string' ? cat.trim() : '';
+    const rawSub = typeof sub === 'string' ? sub.trim() : '';
+    if (rawCat && findCat(rawCat)) return rawCat;
+    if (rawSub && findCat(rawSub)) return rawSub;
+    const aliases = (state.fw && state.fw.aliases) || {};
+    const mapped = (rawSub && aliases[rawSub]) || (rawCat && aliases[rawCat]) || '';
+    if (mapped && findCat(mapped)) return mapped;
+    return (cats()[0] || {}).id || '概念与原理';
   }
-  function findSub(catId, subId) {
-    const subs = subsOf(catId);
-    const hit = subs.find((s) => s.id === subId);
-    if (hit) return hit;
-    // 老题可能还挂着改名前的名字，按 aliases 认一下
-    const c = findCat(catId);
-    const mapped = (c && c.aliases ? c.aliases[subId] : '') || '';
-    return mapped ? subs.find((s) => s.id === mapped) || null : null;
-  }
-  // 一级 Tag 的序号（从 0 开始），用于配色和「1/5」角标
+  // 答题类型的序号（从 0 开始），用于配色和「1」角标
   function catIndex(catId) {
     const i = cats().findIndex((c) => c.id === catId);
     return i < 0 ? 0 : i;
   }
 
-  // 这道题该用哪套分段标题：只用二级的 labels。一级原来那套「思路」已经整个去掉了，
-  // 找不到就返回空，让分段退化成「补充 N」，不要拿别的东西顶上去。
+  // 这道题该用哪套分段标题：直接取该答题类型的 labels。
   function labelsOf(item) {
-    const sub = findSub(item.cat, item.sub);
-    if (sub && Array.isArray(sub.labels) && sub.labels.length) return sub.labels;
+    const c = findCat(item.cat);
+    if (c && Array.isArray(c.labels) && c.labels.length) return c.labels;
     return [];
   }
 
@@ -214,9 +208,9 @@
       if (data.tagIssues && data.tagIssues.length) {
         const sample = data.tagIssues
           .slice(0, 3)
-          .map((x) => `${x.cat} / ${x.sub || '空'}「${x.q.slice(0, 12)}」`)
+          .map((x) => `${x.cat || '空'}「${x.q.slice(0, 12)}」`)
           .join('、');
-        notes.push(`有 ${data.tagIssues.length} 道题的二级 Tag 对不上现在的方法（${sample}），打开编辑重选一次就能修好。`);
+        notes.push(`有 ${data.tagIssues.length} 道题的答题类型对不上现在的骨架（${sample}），打开编辑重选一次就能修好。`);
       }
       if (notes.length) showBanner(notes.join(' '));
       restoreSession();
@@ -313,9 +307,11 @@
     if (s.idx >= s.queue.length) return;
     const alive = new Set(aliveItems().map((x) => x.id));
     if (!s.queue.every((id) => alive.has(id))) return;
+    const savedCat = (s.filter && s.filter.cat) || '';
+    if (savedCat && !findCat(savedCat)) return;
     state.session = s;
     state.filter = {
-      cat: (s.filter && s.filter.cat) || '',
+      cat: savedCat,
       order: (s.filter && s.filter.order) || 'seq',
     };
     syncQueueWithItems();
@@ -353,7 +349,7 @@
     renderFilterPopover();
   }
 
-  // 顶部那个「只看 xxx」：一级 Tag 筛选生效时必须看得见。
+  // 顶部那个「只看 xxx」：答题类型筛选生效时必须看得见。
   // 不然题库里 4 道、主页只走 3 道，会以为题目丢了。
   function renderFilterState() {
     const cat = (state.filter && state.filter.cat) || '';
@@ -401,9 +397,7 @@
     el.summary.hidden = true;
 
     const ci = catIndex(item.cat);
-    el.qMeta.innerHTML =
-      `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>` +
-      (item.sub ? `<span class="sub-chip">${escapeHtml(item.sub)}</span>` : '');
+    el.qMeta.innerHTML = `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>`;
 
     el.qText.textContent = item.q;
 
@@ -462,8 +456,7 @@
     }
     el.frameBlock.hidden = false;
 
-    // 只显示二级的答题步骤。一级那套「思路」已经从配置和界面里整个去掉，
-    // 现在页面上任何位置都不该再出现它。
+    // 显示当前答题类型的固定分段步骤。
     el.skeleton.innerHTML = labels
       .map(
         (l, i) =>
@@ -538,7 +531,7 @@
 
     el.summary.innerHTML = `
       <h2 class="summary-title">这个类型下没有题目</h2>
-      <p class="summary-sub">换个一级 Tag，或者先把题目录进来。</p>
+      <p class="summary-sub">换个答题类型，或者先把题目录进来。</p>
       <div class="summary-actions">
         <button class="primary-btn" id="btnResetScope">看全部题目</button>
         <button class="text-btn" id="btnToBank2">去题库</button>
@@ -612,7 +605,6 @@
             <div class="q-row-main">
               <div class="q-row-cat">
                 <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
-                ${x.sub ? `<span class="s">${escapeHtml(x.sub)}</span>` : ''}
               </div>
               <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
               <div class="q-row-meta">
@@ -690,7 +682,6 @@
 
     persistSession();
     renderReview();
-    saveItem(item);
   }
 
   function goPrev() {
@@ -702,31 +693,6 @@
     state.step = prev ? buildLayers(prev).length : 0;
     persistSession();
     renderReview();
-  }
-
-  // ---------------- 保存 ----------------
-
-  let saveChain = Promise.resolve();
-
-  function saveItem(item) {
-    setSaveState('保存中…');
-    const payload = {
-      id: item.id,
-      q: item.q,
-      cat: item.cat,
-      sub: item.sub,
-      segments: item.segments,
-      fu: item.fu,
-      deleted: item.deleted,
-    };
-    saveChain = saveChain
-      .then(() => api('/api/questions', payload))
-      .then((res) => {
-        Object.assign(item, res.item);
-        setSaveState('已保存');
-      })
-      .catch((err) => setSaveState('保存失败：' + err.message, true));
-    return saveChain;
   }
 
   // ---------------- 视图 ----------------
@@ -762,17 +728,12 @@
     el.fNote.value = item ? item.note || '' : '';
     state.editNote = el.fNote.value;
 
-    // 一级 / 二级都要对齐到当前配置：老题如果挂着改名前的名字，这里自动落到新名字上。
-    // 不这么做的话二级一个都不会高亮，保存时又把这个错名字写回去了。
-    const catOk = item && findCat(item.cat) ? item.cat : (cats()[0] || {}).id || '解释原理';
-    const subMeta = item ? findSub(catOk, item.sub) : null;
-    state.editCat = catOk;
-    state.editSub = subMeta ? subMeta.id : (subsOf(catOk)[0] || {}).id || '';
+    // 答题类型对齐到当前配置：老题如果挂着旧名字，自动按 aliases 落到新名字上。
+    state.editCat = item ? resolveCatId(item.cat, item.sub) : (cats()[0] || {}).id || '概念与原理';
     state.editSegs = item ? (item.segments || []).slice() : [];
     state.editFu = item ? item.fu.map((f) => ({ ...f })) : [];
 
     renderCatPicker();
-    renderSubPicker();
     renderFuEditor();
 
     el.btnDelete.hidden = !item;
@@ -808,17 +769,8 @@
           `<button type="button" class="${c.id === state.editCat ? 'is-on' : ''}" data-cat="${escapeHtml(c.id)}">${escapeHtml(c.id)}</button>`
       )
       .join('');
-  }
 
-  function renderSubPicker() {
-    el.subPicker.innerHTML = subsOf(state.editCat)
-      .map(
-        (s) =>
-          `<button type="button" class="${s.id === state.editSub ? 'is-on' : ''}" data-sub="${escapeHtml(s.id)}">${escapeHtml(s.id)}</button>`
-      )
-      .join('');
-
-    const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
+    const labels = labelsOf({ cat: state.editCat });
     el.skeletonPreview.innerHTML = labels
       .map((l, i) => `${i + 1} ${escapeHtml(l)}`)
       .join(' → ');
@@ -835,7 +787,7 @@
   }
 
   function renderSegEditor() {
-    const labels = labelsOf({ cat: state.editCat, sub: state.editSub });
+    const labels = labelsOf({ cat: state.editCat });
     // 段数取两者最大值：方法变短了，也要保住这道题原有的旧内容，不能截断
     const n = Math.max(labels.length, state.editSegs.length);
 
@@ -848,8 +800,8 @@
     const extra = n - labels.length;
     el.segHint.textContent =
       extra > 0
-        ? `这套方法有 ${labels.length} 步，下面还留着 ${extra} 段旧内容，可以并进去或删掉`
-        : `${labels.length} 段，只填要讲的，空着会跳过`;
+        ? `这套骨架有 ${labels.length} 段，下面还留着 ${extra} 段旧内容，可以并进去或删掉`
+        : `${labels.length} 段，每段必填`;
 
     el.segEditor.innerHTML = Array.from({ length: n }, (_, i) => {
       const l = labels[i] || `补充 ${i + 1}`;
@@ -899,7 +851,6 @@
     const payload = {
       q,
       cat: state.editCat,
-      sub: state.editSub,
       segments: segs,
       fu: state.editFu.filter((f) => f.q.trim()),
       note: el.fNote.value.trim(),
@@ -998,8 +949,6 @@
         } else if (key === 'SUB') {
           cur.sub = val.trim();
           field = null;
-        } else if (key === 'BRIEF') {
-          field = null;
         } else if (key === 'S' || key === 'SEG' || key === 'A') {
           cur.segments.push(val);
           field = 'seg';
@@ -1083,17 +1032,13 @@
     const newIds = [];
     for (const p of fresh) {
       try {
-        const cat = p.cat && findCat(p.cat) ? p.cat : (cats()[0] || {}).id || '解释原理';
-        const subMeta = findSub(cat, p.sub);
-        const sub = subMeta ? subMeta.id : (subsOf(cat)[0] || {}).id || '';
+        const cat = resolveCatId(p.cat, p.sub);
         const res = await api('/api/questions', {
           q: p.q,
           cat,
-          sub,
           segments: p.segments,
           fu: p.fu,
           note: p.note || '',
-          level: 2,
         });
         state.items.push(res.item);
         newIds.push(res.item.id);
@@ -1223,15 +1168,8 @@
       const b = e.target.closest('[data-cat]');
       if (!b) return;
       state.editCat = b.dataset.cat;
-      if (!findSub(state.editCat, state.editSub)) state.editSub = (subsOf(state.editCat)[0] || {}).id || '';
+      state.drawerDirty = true;
       renderCatPicker();
-      renderSubPicker();
-    });
-    el.subPicker.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-sub]');
-      if (!b) return;
-      state.editSub = b.dataset.sub;
-      renderSubPicker();
     });
     el.segEditor.addEventListener('input', (e) => {
       const node = e.target.closest('[data-seg]');

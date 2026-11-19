@@ -190,12 +190,14 @@ input, textarea, select { font-family: inherit; }
   flex-wrap: wrap;
   min-height: 4px;
 }
-/* 一级 Tag 配色：--cat-fg / --cat-bg 由 .c0~.c4 提供 */
+/* 答题类型配色：--cat-fg / --cat-bg 由 .c0~.c6 提供 */
 .c0 { --cat-fg: #3b6ea5; --cat-bg: #e9eff7; }
-.c1 { --cat-fg: #6b5b95; --cat-bg: #eeebf6; }
-.c2 { --cat-fg: #2f6b57; --cat-bg: #e7f0ec; }
-.c3 { --cat-fg: #a3562f; --cat-bg: #f7ece5; }
-.c4 { --cat-fg: #2b6e7f; --cat-bg: #e6f0f3; }
+.c1 { --cat-fg: #2b6e7f; --cat-bg: #e6f0f3; }
+.c2 { --cat-fg: #8c5a2b; --cat-bg: #f6efe6; }
+.c3 { --cat-fg: #6b5b95; --cat-bg: #eeebf6; }
+.c4 { --cat-fg: #2f6b57; --cat-bg: #e7f0ec; }
+.c5 { --cat-fg: #a3562f; --cat-bg: #f7ece5; }
+.c6 { --cat-fg: #7b4f6e; --cat-bg: #f4ebf1; }
 
 .cat-chip {
   display: inline-flex;
@@ -716,9 +718,6 @@ kbd {
   color: var(--accent);
 }
 .picker button:disabled { opacity: 0.35; cursor: default; }
-
-#subPicker { margin-top: 8px; }
-#subPicker button { font-size: 12.5px; padding: 5px 10px; }
 
 .skeleton-preview {
   margin-top: 9px;
