@@ -153,18 +153,36 @@
     return [];
   }
 
+  // 按当前骨架段数对齐 segments：多余的空段直接裁掉，多余的非空段用空行拼到最后一段末尾，绝不丢字、绝不生成「补充 N」。
+  function fitSegments(segs, count) {
+    const arr = Array.isArray(segs) ? segs.slice() : [];
+    if (count <= 0) return arr;
+    const out = Array.from({ length: count }, (_, i) => (typeof arr[i] === 'string' ? arr[i] : ''));
+    if (arr.length > count) {
+      const tail = arr
+        .slice(count)
+        .map((s) => (typeof s === 'string' ? s.trim() : ''))
+        .filter(Boolean);
+      if (tail.length) {
+        const last = out[count - 1].trim();
+        out[count - 1] = last ? last + '\n\n' + tail.join('\n\n') : tail.join('\n\n');
+      }
+    }
+    return out;
+  }
+
   // ---------------- 层：骨架的每一段就是一层 ----------------
 
   function buildLayers(item) {
     const labels = labelsOf(item);
-    const segs = Array.isArray(item.segments) ? item.segments : [];
+    const segs = labels.length ? fitSegments(item.segments, labels.length) : Array.isArray(item.segments) ? item.segments : [];
     const layers = [];
 
-    const n = Math.max(labels.length, segs.length);
+    const n = labels.length || segs.length;
     for (let i = 0; i < n; i++) {
       const text = segs[i] || '';
       if (!text.trim()) continue;
-      layers.push({ key: 'seg' + i, kind: 'seg', num: i + 1, label: labels[i] || `补充 ${i + 1}`, text });
+      layers.push({ key: 'seg' + i, kind: 'seg', num: i + 1, label: labels[i] || `第 ${i + 1} 段`, text });
     }
 
     if ((item.fu || []).length) {
@@ -730,7 +748,7 @@
 
     // 答题类型对齐到当前配置：老题如果挂着旧名字，自动按 aliases 落到新名字上。
     state.editCat = item ? resolveCatId(item.cat, item.sub) : (cats()[0] || {}).id || '概念与原理';
-    state.editSegs = item ? (item.segments || []).slice() : [];
+    state.editSegs = fitSegments(item ? item.segments : [], labelsOf({ cat: state.editCat }).length);
     state.editFu = item ? item.fu.map((f) => ({ ...f })) : [];
 
     renderCatPicker();
@@ -788,8 +806,7 @@
 
   function renderSegEditor() {
     const labels = labelsOf({ cat: state.editCat });
-    // 段数取两者最大值：方法变短了，也要保住这道题原有的旧内容，不能截断
-    const n = Math.max(labels.length, state.editSegs.length);
+    const n = labels.length;
 
     if (!n) {
       el.segEditor.innerHTML = '<div class="focus-hint">这套骨架没有配置分段。</div>';
@@ -797,22 +814,20 @@
       return;
     }
 
-    const extra = n - labels.length;
-    el.segHint.textContent =
-      extra > 0
-        ? `这套骨架有 ${labels.length} 段，下面还留着 ${extra} 段旧内容，可以并进去或删掉`
-        : `${labels.length} 段，每段必填`;
+    state.editSegs = fitSegments(state.editSegs, n);
+    el.segHint.textContent = `${n} 段，每段必填`;
 
-    el.segEditor.innerHTML = Array.from({ length: n }, (_, i) => {
-      const l = labels[i] || `补充 ${i + 1}`;
-      return `<div class="seg-row">
+    el.segEditor.innerHTML = labels
+      .map(
+        (l, i) => `<div class="seg-row">
           <div class="seg-head">
             <span class="seg-idx">${i + 1}</span>
             <span class="seg-label">${escapeHtml(l)}</span>
           </div>
           <textarea data-seg="${i}" rows="3" placeholder="写「${escapeHtml(l)}」这一段"></textarea>
-        </div>`;
-    }).join('');
+        </div>`
+      )
+      .join('');
 
     $$('[data-seg]', el.segEditor).forEach((t) => {
       const v = state.editSegs[Number(t.dataset.seg)];
@@ -844,9 +859,10 @@
       return;
     }
 
-    // 按页面上实际存在的输入框收集，不按方法步数收集，避免旧内容被截断
+    const labels = labelsOf({ cat: state.editCat });
     const boxes = $$('[data-seg]', el.segEditor);
-    const segs = boxes.length ? boxes.map((node) => node.value) : state.editSegs.slice();
+    const rawSegs = boxes.length ? boxes.map((node) => node.value) : state.editSegs.slice();
+    const segs = labels.length ? fitSegments(rawSegs, labels.length) : rawSegs;
 
     const payload = {
       q,
@@ -1168,6 +1184,7 @@
       const b = e.target.closest('[data-cat]');
       if (!b) return;
       state.editCat = b.dataset.cat;
+      state.editSegs = fitSegments(state.editSegs, labelsOf({ cat: state.editCat }).length);
       state.drawerDirty = true;
       renderCatPicker();
     });
