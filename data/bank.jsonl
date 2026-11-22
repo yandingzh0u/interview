@@ -73,3 +73,5 @@
 {"id":"q_ts666p","q":"遇到慢 SQL 怎么排查和优化，EXPLAIN 主要看哪些字段？","cat":"问题解决","segments":["",""],"fu":[],"note":"","createdAt":"2026-11-22T17:10:14+08:00","updatedAt":"2026-11-22T17:10:14+08:00","deleted":false}
 {"id":"q_1e3vxj","q":"千万级大表做深分页查询为什么慢，怎么优化？","cat":"问题解决","segments":["",""],"fu":[],"note":"","createdAt":"2026-11-22T17:10:15+08:00","updatedAt":"2026-11-22T17:10:15+08:00","deleted":false}
 {"id":"q_4a1uj8","q":"什么情况下需要分库分表，按订单 ID 分表后怎么查某个用户的全部订单？","cat":"问题解决","segments":["",""],"fu":[],"note":"","createdAt":"2026-11-22T17:10:16+08:00","updatedAt":"2026-11-22T17:10:16+08:00","deleted":false}
+{"id":"q_atiwyj","q":"MySQL 主从复制是怎么实现的？","cat":"工作流程","segments":[""],"fu":[],"note":"","createdAt":"2026-11-22T17:53:01+08:00","updatedAt":"2026-11-22T17:53:01+08:00","deleted":false}
+{"id":"q_aovh0u","q":"如何用 MySQL 防止并发扣库存时超卖？","cat":"问题解决","segments":["",""],"fu":[],"note":"","createdAt":"2026-11-22T17:53:02+08:00","updatedAt":"2026-11-22T17:53:02+08:00","deleted":false}
