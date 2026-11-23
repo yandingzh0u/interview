@@ -22,8 +22,11 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="brand"><span class="brand-name">背题</span></div>
-    <nav class="tabs">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-name">背题</span>
+    </div>
+    <nav class="tabs" aria-label="视图切换">
       <button class="tab is-active" data-view="review">背诵</button>
       <button class="tab" data-view="bank">题库</button>
     </nav>
@@ -31,7 +34,10 @@
       <span class="pos" id="posInfo"></span>
       <span class="only" id="filterState" hidden></span>
       <span class="save-state" id="saveState"></span>
-      <button class="text-btn" id="btnFilter">筛选</button>
+      <button class="filter-btn" id="btnFilter">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M4.5 8h7M7 12h2"/></svg>
+        <span>筛选</span>
+      </button>
 
       <div class="popover" id="filterPop" hidden>
         <div class="pop-group">
@@ -72,7 +78,7 @@
 
     <div class="layers" id="layers"></div>
 
-    <p class="hint" id="hint"></p>
+    <div class="hint" id="hint"></div>
   </div>
 
   <div class="empty" id="emptyState" hidden>
@@ -88,25 +94,38 @@
 <main class="view" id="view-bank">
   <div class="bank">
     <div class="bank-head">
-      <input class="search" id="searchInput" placeholder="搜索题目或答案…" autocomplete="off">
+      <div class="search-wrap">
+        <svg class="search-ico" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.8 10.8L14 14"/></svg>
+        <input class="search" id="searchInput" placeholder="搜索题目、答案或备注…" autocomplete="off">
+        <kbd class="search-kbd">/</kbd>
+      </div>
       <button class="outline-btn" id="btnImport">批量导入</button>
       <button class="primary-btn" id="btnNew">新建题目</button>
     </div>
+
     <div class="cat-filter" id="catFilter"></div>
-    <div class="bank-filters">
-      <button class="chip is-active" data-bankfilter="active">全部</button>
-      <button class="chip" data-bankfilter="empty">空白题</button>
-      <button class="chip" data-bankfilter="deleted">回收站</button>
-      <span class="bank-stat" id="bankStat"></span>
+
+    <div class="bank-panel">
+      <div class="bank-filters">
+        <button class="chip is-active" data-bankfilter="active">全部</button>
+        <button class="chip" data-bankfilter="default">默认答案</button>
+        <button class="chip" data-bankfilter="edited">已修改</button>
+        <button class="chip" data-bankfilter="empty">空白题</button>
+        <button class="chip" data-bankfilter="deleted">回收站</button>
+        <span class="bank-stat" id="bankStat"></span>
+      </div>
+      <div class="bank-list" id="bankList"></div>
     </div>
-    <div class="bank-list" id="bankList"></div>
   </div>
 </main>
 
 <!-- ============ 编辑抽屉 ============ -->
 <aside class="drawer" id="drawer">
   <div class="drawer-head">
-    <span id="drawerTitle">新建题目</span>
+    <div class="drawer-head-left">
+      <span id="drawerTitle">新建题目</span>
+      <span class="origin-pill" id="drawerOrigin" hidden></span>
+    </div>
     <button class="icon-btn" id="drawerClose" title="关闭">✕</button>
   </div>
   <div class="drawer-body">

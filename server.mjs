@@ -82,6 +82,7 @@ function normalize(o) {
     segments,
     fu,
     note: typeof o.note === 'string' ? o.note : '',
+    edited: o.edited === true,
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : nowISO(),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : nowISO(),
     deleted: o.deleted === true,
@@ -402,6 +403,7 @@ const handler = async (req, res) => {
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
           note: body.note ?? prev.note,
+          edited: typeof body.edited === 'boolean' ? body.edited : prev.edited,
           deleted: body.deleted ?? prev.deleted,
           createdAt: prev.createdAt,
           updatedAt: nowISO(),
@@ -417,6 +419,7 @@ const handler = async (req, res) => {
           segments: body.segments,
           fu: body.fu,
           note: body.note,
+          edited: body.edited === true,
           createdAt: nowISO(),
           updatedAt: nowISO(),
         });

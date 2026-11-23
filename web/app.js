@@ -30,6 +30,7 @@
     posInfo: $('#posInfo'),
     filterState: $('#filterState'),
     saveState: $('#saveState'),
+    btnFilter: $('#btnFilter'),
     progressBar: $('#progressBar'),
     viewReview: $('#view-review'),
     viewBank: $('#view-bank'),
@@ -51,6 +52,7 @@
     searchInput: $('#searchInput'),
     drawer: $('#drawer'),
     drawerTitle: $('#drawerTitle'),
+    drawerOrigin: $('#drawerOrigin'),
     fQ: $('#fQ'),
     segEditor: $('#segEditor'),
     segHint: $('#segHint'),
@@ -194,6 +196,12 @@
   function isBlank(item) {
     const hasSeg = (item.segments || []).some((s) => (s || '').trim());
     return !hasSeg && !(item.fu || []).length;
+  }
+
+  function originBadgeHtml(item) {
+    if (isBlank(item)) return '<span class="origin-pill is-blank">空白题</span>';
+    if (item.edited) return '<span class="origin-pill is-edited">已修改</span>';
+    return '<span class="origin-pill is-default">默认答案</span>';
   }
 
   // ---------------- 数据加载 ----------------
@@ -371,7 +379,10 @@
   // 不然题库里 4 道、主页只走 3 道，会以为题目丢了。
   function renderFilterState() {
     const cat = (state.filter && state.filter.cat) || '';
-    el.filterState.hidden = !cat || state.view !== 'review';
+    const isReview = state.view === 'review';
+    el.btnFilter.hidden = !isReview;
+    el.btnFilter.classList.toggle('is-active', isReview && Boolean(cat || state.filter.order === 'random'));
+    el.filterState.hidden = !cat || !isReview;
     el.filterState.innerHTML = cat
       ? `只看 ${escapeHtml(cat)}<button type="button" data-fclear title="取消筛选，回到全部题目">✕</button>`
       : '';
@@ -415,7 +426,7 @@
     el.summary.hidden = true;
 
     const ci = catIndex(item.cat);
-    el.qMeta.innerHTML = `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>`;
+    el.qMeta.innerHTML = `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>${originBadgeHtml(item)}`;
 
     el.qText.textContent = item.q;
 
@@ -425,7 +436,7 @@
     renderLayers(item);
 
     const layers = buildLayers(item);
-    el.hint.textContent = hintText(layers);
+    el.hint.innerHTML = hintHtml(layers);
 
     if (!layers.length) {
       el.layers.innerHTML = `<div class="empty-note">这道题还没有内容。先按上面的骨架自己讲一遍，再去「题库」把每一段补上。</div>`;
@@ -436,8 +447,8 @@
     renderNote(item);
 
     const total = sess.queue.length;
-    el.posInfo.textContent = `${Math.min(sess.idx + 1, total)}/${total}`;
-    el.progressBar.style.width = `${(sess.idx / total) * 100}%`;
+    el.posInfo.textContent = `${Math.min(sess.idx + 1, total)} / ${total}`;
+    el.progressBar.style.width = `${((sess.idx + 1) / total) * 100}%`;
   }
 
   // 备注：写给自己看的注释。折叠收在步骤下面、答案上面——
@@ -474,13 +485,15 @@
     }
     el.frameBlock.hidden = false;
 
-    // 显示当前答题类型的固定分段步骤。
+    // 显示当前答题类型的固定分段步骤，并随展开进度高亮。
     el.skeleton.innerHTML = labels
-      .map(
-        (l, i) =>
-          (i ? '<span class="sep">→</span>' : '') +
-          `<span class="sk"><i>${i + 1}</i><b>${escapeHtml(l)}</b></span>`
-      )
+      .map((l, i) => {
+        const cls = i < state.step ? 'sk is-done' : i === state.step ? 'sk is-next' : 'sk';
+        return (
+          (i ? '<span class="sep">›</span>' : '') +
+          `<span class="${cls}"><i>${i + 1}</i><b>${escapeHtml(l)}</b></span>`
+        );
+      })
       .join('');
   }
 
@@ -572,20 +585,31 @@
       `<button class="chip ${state.bankCat ? '' : 'is-active'}" data-bankcat="">全部类型</button>` +
       cats()
         .map(
-          (c) =>
-            `<button class="chip ${state.bankCat === c.id ? 'is-active' : ''}" data-bankcat="${escapeHtml(c.id)}">${escapeHtml(c.id)}</button>`
+          (c, i) =>
+            `<button class="chip ${state.bankCat === c.id ? 'is-active' : ''}" data-bankcat="${escapeHtml(c.id)}"><i class="dot c${i}"></i>${escapeHtml(c.id)}</button>`
         )
         .join('');
   }
 
+  function byFixedOrder(a, b) {
+    if (a.createdAt < b.createdAt) return -1;
+    if (a.createdAt > b.createdAt) return 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  }
+
   function renderBank() {
+    const activeOrdered = state.items.filter((x) => !x.deleted).sort(byFixedOrder);
+    const orderMap = new Map(activeOrdered.map((x, idx) => [x.id, idx + 1]));
+
     let list = state.items.slice();
 
     if (state.bankFilter === 'deleted') {
       list = list.filter((x) => x.deleted);
     } else {
       list = list.filter((x) => !x.deleted);
-      if (state.bankFilter === 'empty') list = list.filter((x) => isBlank(x));
+      if (state.bankFilter === 'default') list = list.filter((x) => !x.edited && !isBlank(x));
+      else if (state.bankFilter === 'edited') list = list.filter((x) => x.edited && !isBlank(x));
+      else if (state.bankFilter === 'empty') list = list.filter((x) => isBlank(x));
     }
 
     if (state.bankCat) list = list.filter((x) => x.cat === state.bankCat);
@@ -600,7 +624,7 @@
       );
     }
 
-    list.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+    list.sort(byFixedOrder);
     el.bankStat.textContent = `${list.length} 题`;
 
     if (!list.length) {
@@ -609,26 +633,33 @@
           ? '回收站是空的'
           : state.search
             ? '没有匹配的题目'
-            : state.bankCat
-              ? '这个类型下还没有题目'
-              : '还没有题目，点右上角「新建题目」或「批量导入」';
+            : state.bankFilter === 'default'
+              ? '没有未修改的默认答案了'
+              : state.bankFilter === 'edited'
+                ? '还没有手动修改过的题目'
+                : state.bankFilter === 'empty'
+                  ? '没有空白题，答案已全部补齐'
+                  : state.bankCat
+                    ? '这个类型下还没有题目'
+                    : '还没有题目，点右上角「新建题目」或「批量导入」';
       el.bankList.innerHTML = `<div class="list-empty">${text}</div>`;
       return;
     }
 
     el.bankList.innerHTML = list
-      .map((x) => {
+      .map((x, idx) => {
+        const num = !x.deleted && orderMap.has(x.id) ? orderMap.get(x.id) : idx + 1;
+        const numStr = String(num).padStart(2, '0');
+        const hasNote = x.note && x.note.trim();
         return `
           <div class="q-row ${x.deleted ? 'is-deleted' : ''}" data-id="${x.id}">
-            <div class="q-row-main">
-              <div class="q-row-cat">
-                <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
-              </div>
-              <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
-              <div class="q-row-meta">
-                ${isBlank(x) ? '<span class="blank">空白题</span>' : ''}
-                ${x.note && x.note.trim() ? '<span class="has-note">备注</span>' : ''}
-              </div>
+            <span class="q-row-idx">${numStr}</span>
+            <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
+            <div class="q-row-tags">
+              ${hasNote ? '<span class="has-note">备注</span>' : ''}
+              ${x.deleted ? '' : originBadgeHtml(x)}
+              <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
+              <span class="q-row-arrow" aria-hidden="true">›</span>
             </div>
           </div>`;
       })
@@ -644,11 +675,10 @@
       `<button class="chip ${state.filter.cat ? '' : 'is-active'}" data-fcat="">不限</button>` +
       cats()
         .map(
-          (c) =>
-            `<button class="chip ${state.filter.cat === c.id ? 'is-active' : ''}" data-fcat="${escapeHtml(c.id)}">${escapeHtml(c.id)}</button>`
+          (c, i) =>
+            `<button class="chip ${state.filter.cat === c.id ? 'is-active' : ''}" data-fcat="${escapeHtml(c.id)}"><i class="dot c${i}"></i>${escapeHtml(c.id)}</button>`
         )
         .join('');
-
   }
 
   // ---------------- 背诵交互 ----------------
@@ -662,8 +692,9 @@
     state.step += 1;
 
     const before = el.layers.children.length;
+    renderSkeleton(item);
     renderLayers(item);
-    el.hint.textContent = hintText(layers);
+    el.hint.innerHTML = hintHtml(layers);
 
     const added = [...el.layers.children].slice(before);
     if (added.length) {
@@ -675,18 +706,20 @@
     }
   }
 
-  function hintText(layers) {
+  function hintHtml(layers) {
     const s = state.session;
     const total = s ? s.queue.length : 0;
     const idx = s ? s.idx : 0;
 
     if (state.step < layers.length) {
-      return state.step === 0 ? '空格　先按骨架自己讲一遍' : '空格　下一段';
+      const tip = state.step === 0 ? '先按骨架自己讲一遍，再展开' : '展开下一段';
+      return `<span class="hint-item"><kbd>Space</kbd>${tip}</span>`;
     }
     if (total <= 1) return '';
-    if (idx === 0) return '→ 下一题';
-    if (idx >= total - 1) return '← 上一题';
-    return '← 上一题　　→ 下一题';
+    const parts = [];
+    if (idx > 0) parts.push('<span class="hint-item"><kbd>←</kbd>上一题</span>');
+    if (idx < total - 1) parts.push('<span class="hint-item"><kbd>→</kbd>下一题</span>');
+    return parts.join('<span class="hint-sep"></span>');
   }
 
   function next() {
@@ -742,6 +775,21 @@
 
     const item = state.editing;
     el.drawerTitle.textContent = item ? (item.deleted ? '查看题目（已删除）' : '编辑题目') : '新建题目';
+    if (item && !item.deleted) {
+      el.drawerOrigin.hidden = false;
+      if (isBlank(item)) {
+        el.drawerOrigin.className = 'origin-pill is-blank';
+        el.drawerOrigin.textContent = '空白题';
+      } else if (item.edited) {
+        el.drawerOrigin.className = 'origin-pill is-edited';
+        el.drawerOrigin.textContent = '已修改';
+      } else {
+        el.drawerOrigin.className = 'origin-pill is-default';
+        el.drawerOrigin.textContent = '默认答案';
+      }
+    } else {
+      el.drawerOrigin.hidden = true;
+    }
     el.fQ.value = item ? item.q : '';
     el.fNote.value = item ? item.note || '' : '';
     state.editNote = el.fNote.value;
@@ -783,15 +831,19 @@
   function renderCatPicker() {
     el.catPicker.innerHTML = cats()
       .map(
-        (c) =>
-          `<button type="button" class="${c.id === state.editCat ? 'is-on' : ''}" data-cat="${escapeHtml(c.id)}">${escapeHtml(c.id)}</button>`
+        (c, i) =>
+          `<button type="button" class="${c.id === state.editCat ? 'is-on' : ''}" data-cat="${escapeHtml(c.id)}"><i class="dot c${i}"></i>${escapeHtml(c.id)}</button>`
       )
       .join('');
 
     const labels = labelsOf({ cat: state.editCat });
     el.skeletonPreview.innerHTML = labels
-      .map((l, i) => `${i + 1} ${escapeHtml(l)}`)
-      .join(' → ');
+      .map(
+        (l, i) =>
+          (i ? '<span class="sp-sep">›</span>' : '') +
+          `<span class="sp-step"><i>${i + 1}</i>${escapeHtml(l)}</span>`
+      )
+      .join('');
 
     renderSegEditor();
   }
@@ -801,7 +853,8 @@
     if (!node || node.tagName !== 'TEXTAREA') return;
     node.style.height = 'auto';
     // +6 留一点余量，最后一行不贴边；永远比刚好放下稍微长一点
-    node.style.height = Math.max(node.scrollHeight + 6, 96) + 'px';
+    const minH = node.id === 'fQ' ? 54 : 96;
+    node.style.height = Math.max(node.scrollHeight + 6, minH) + 'px';
   }
 
   function renderSegEditor() {
@@ -870,6 +923,7 @@
       segments: segs,
       fu: state.editFu.filter((f) => f.q.trim()),
       note: el.fNote.value.trim(),
+      edited: segs.some((s) => s.trim()),
     };
     if (state.editing) payload.id = state.editing.id;
 
@@ -1055,6 +1109,7 @@
           segments: p.segments,
           fu: p.fu,
           note: p.note || '',
+          edited: false,
         });
         state.items.push(res.item);
         newIds.push(res.item.id);
@@ -1138,7 +1193,7 @@
     });
 
     document.addEventListener('click', (e) => {
-      if (!el.filterPop.hidden && !el.filterPop.contains(e.target) && e.target.id !== 'btnFilter') {
+      if (!el.filterPop.hidden && !el.filterPop.contains(e.target) && !el.btnFilter.contains(e.target)) {
         el.filterPop.hidden = true;
       }
     });
