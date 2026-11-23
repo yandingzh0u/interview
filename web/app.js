@@ -1292,13 +1292,15 @@
     el.domainChips.addEventListener('click', (e) => {
       const b = e.target.closest('[data-fdomain]');
       if (!b) return;
-      state.filter.domain = b.dataset.fdomain;
+      const next = b.dataset.fdomain;
+      state.filter.domain = next && state.filter.domain === next ? '' : next;
       renderFilterPopover();
     });
     el.catChips.addEventListener('click', (e) => {
       const b = e.target.closest('[data-fcat]');
       if (!b) return;
-      state.filter.cat = b.dataset.fcat;
+      const next = b.dataset.fcat;
+      state.filter.cat = next && state.filter.cat === next ? '' : next;
       renderFilterPopover();
     });
     $('#btnResetFilter').addEventListener('click', () => {
@@ -1325,7 +1327,8 @@
     el.domainTabs.addEventListener('click', (e) => {
       const b = e.target.closest('[data-bankdomain]');
       if (!b) return;
-      state.bankDomain = b.dataset.bankdomain;
+      const next = b.dataset.bankdomain;
+      state.bankDomain = next && state.bankDomain === next ? '' : next;
       // 切领域时如果停在回收站，顺手切回「全部」，避免切完没反应
       if (state.bankFilter === 'deleted') {
         state.bankFilter = 'active';
@@ -1336,15 +1339,17 @@
     });
     $$('[data-bankfilter]').forEach((b) =>
       b.addEventListener('click', () => {
-        state.bankFilter = b.dataset.bankfilter;
-        $$('[data-bankfilter]').forEach((x) => x.classList.toggle('is-active', x === b));
+        const next = b.dataset.bankfilter;
+        state.bankFilter = next !== 'active' && state.bankFilter === next ? 'active' : next;
+        $$('[data-bankfilter]').forEach((x) => x.classList.toggle('is-active', x.dataset.bankfilter === state.bankFilter));
         renderBank();
       })
     );
     el.catFilter.addEventListener('click', (e) => {
       const b = e.target.closest('[data-bankcat]');
       if (!b) return;
-      state.bankCat = b.dataset.bankcat;
+      const next = b.dataset.bankcat;
+      state.bankCat = next && state.bankCat === next ? '' : next;
       renderCatFilter();
       renderBank();
     });
