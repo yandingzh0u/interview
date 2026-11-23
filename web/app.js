@@ -12,11 +12,13 @@
     view: 'review',
     step: 0,
     session: null,
-    filter: { cat: '', order: 'seq' },
+    filter: { domain: '', cat: '', order: 'seq' },
     bankFilter: 'active',
+    bankDomain: '',
     bankCat: '',
     search: '',
     editing: null,
+    editDomain: '',
     editCat: '',
     editSegs: [],
     editFu: [],
@@ -45,7 +47,9 @@
     summary: $('#summary'),
     filterPop: $('#filterPop'),
     orderChips: $('#orderChips'),
+    domainChips: $('#domainChips'),
     catChips: $('#catChips'),
+    domainTabs: $('#domainTabs'),
     catFilter: $('#catFilter'),
     bankList: $('#bankList'),
     bankStat: $('#bankStat'),
@@ -54,6 +58,8 @@
     drawerTitle: $('#drawerTitle'),
     drawerOrigin: $('#drawerOrigin'),
     fQ: $('#fQ'),
+    domainPicker: $('#domainPicker'),
+    fDomain: $('#fDomain'),
     segEditor: $('#segEditor'),
     segHint: $('#segHint'),
     catPicker: $('#catPicker'),
@@ -285,14 +291,36 @@
     return state.items.filter((x) => !x.deleted);
   }
 
+  function domainOf(item) {
+    const d = item && typeof item.domain === 'string' ? item.domain.trim() : '';
+    return d || '未分类';
+  }
+
+  function domains() {
+    const alive = aliveItems().slice().sort(byFixedOrder);
+    const seen = new Map();
+    for (const x of alive) {
+      const d = domainOf(x);
+      seen.set(d, (seen.get(d) || 0) + 1);
+    }
+    const list = [...seen.entries()];
+    const idx = list.findIndex(([name]) => name === '未分类');
+    if (idx > -1) {
+      const [u] = list.splice(idx, 1);
+      list.push(u);
+    }
+    return list;
+  }
+
   function buildQueue(filter) {
     let pool = aliveItems();
+    if (filter.domain) pool = pool.filter((x) => domainOf(x) === filter.domain);
     if (filter.cat) pool = pool.filter((x) => x.cat === filter.cat);
 
     if (filter.order === 'random') {
       pool = shuffle(pool.slice());
     } else {
-      pool = pool.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+      pool = pool.slice().sort(byFixedOrder);
     }
     return pool.map((x) => x.id);
   }
@@ -333,10 +361,12 @@
     if (s.idx >= s.queue.length) return;
     const alive = new Set(aliveItems().map((x) => x.id));
     if (!s.queue.every((id) => alive.has(id))) return;
+    const savedDomain = (s.filter && s.filter.domain) || '';
     const savedCat = (s.filter && s.filter.cat) || '';
     if (savedCat && !findCat(savedCat)) return;
     state.session = s;
     state.filter = {
+      domain: savedDomain,
       cat: savedCat,
       order: (s.filter && s.filter.order) || 'seq',
     };
@@ -370,21 +400,25 @@
 
   function renderAll() {
     renderReview();
-    renderBank();
+    renderDomainTabs();
     renderCatFilter();
+    renderBank();
     renderFilterPopover();
   }
 
-  // 顶部那个「只看 xxx」：答题类型筛选生效时必须看得见。
-  // 不然题库里 4 道、主页只走 3 道，会以为题目丢了。
+  // 顶部那个「只看 xxx」：筛选生效时必须看得见。
   function renderFilterState() {
+    const dom = (state.filter && state.filter.domain) || '';
     const cat = (state.filter && state.filter.cat) || '';
     const isReview = state.view === 'review';
     el.btnFilter.hidden = !isReview;
-    el.btnFilter.classList.toggle('is-active', isReview && Boolean(cat || state.filter.order === 'random'));
-    el.filterState.hidden = !cat || !isReview;
-    el.filterState.innerHTML = cat
-      ? `只看 ${escapeHtml(cat)}<button type="button" data-fclear title="取消筛选，回到全部题目">✕</button>`
+    el.btnFilter.classList.toggle('is-active', isReview && Boolean(dom || cat || state.filter.order === 'random'));
+    const parts = [];
+    if (dom) parts.push(dom);
+    if (cat) parts.push(cat);
+    el.filterState.hidden = !parts.length || !isReview;
+    el.filterState.innerHTML = parts.length
+      ? `只看 ${escapeHtml(parts.join(' · '))}<button type="button" data-fclear title="取消筛选，回到全部题目">✕</button>`
       : '';
   }
 
@@ -426,7 +460,9 @@
     el.summary.hidden = true;
 
     const ci = catIndex(item.cat);
-    el.qMeta.innerHTML = `<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>${originBadgeHtml(item)}`;
+    const dom = item.domain && item.domain.trim();
+    const domHtml = dom ? `<span class="domain-chip">${escapeHtml(dom)}</span>` : '';
+    el.qMeta.innerHTML = `${domHtml}<span class="cat-chip c${ci}"><i>${ci + 1}</i>${escapeHtml(item.cat)}</span>${originBadgeHtml(item)}`;
 
     el.qText.textContent = item.q;
 
@@ -569,7 +605,7 @@
       </div>`;
 
     $('#btnResetScope').addEventListener('click', () => {
-      state.filter = { cat: '', order: 'seq' };
+      state.filter = { domain: '', cat: '', order: 'seq' };
       state.session = null;
       renderFilterPopover();
       renderReview();
@@ -579,6 +615,24 @@
   }
 
   // ---------------- 渲染：题库 ----------------
+
+  function renderDomainTabs() {
+    const list = domains();
+    const total = aliveItems().length;
+    if (state.bankDomain && !list.some(([name]) => name === state.bankDomain)) {
+      state.bankDomain = '';
+    }
+    el.domainTabs.innerHTML =
+      `<button class="domain-tab ${state.bankDomain ? '' : 'is-active'}" data-bankdomain="">` +
+      `<span>全部领域</span><span class="domain-tab-count">${total}</span></button>` +
+      list
+        .map(
+          ([name, count]) =>
+            `<button class="domain-tab ${state.bankDomain === name ? 'is-active' : ''}" data-bankdomain="${escapeHtml(name)}">` +
+            `<span>${escapeHtml(name)}</span><span class="domain-tab-count">${count}</span></button>`
+        )
+        .join('');
+  }
 
   function renderCatFilter() {
     el.catFilter.innerHTML =
@@ -597,9 +651,32 @@
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   }
 
+  function bankRowHtml(x, num) {
+    const numStr = String(num).padStart(2, '0');
+    const hasNote = x.note && x.note.trim();
+    return `
+      <div class="q-row ${x.deleted ? 'is-deleted' : ''}" data-id="${x.id}">
+        <span class="q-row-idx">${numStr}</span>
+        <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
+        <div class="q-row-tags">
+          ${hasNote ? '<span class="has-note">备注</span>' : ''}
+          ${x.deleted ? '' : originBadgeHtml(x)}
+          <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
+          <span class="q-row-arrow" aria-hidden="true">›</span>
+        </div>
+      </div>`;
+  }
+
   function renderBank() {
-    const activeOrdered = state.items.filter((x) => !x.deleted).sort(byFixedOrder);
-    const orderMap = new Map(activeOrdered.map((x, idx) => [x.id, idx + 1]));
+    const activeOrdered = aliveItems().sort(byFixedOrder);
+    const domainOrderMap = new Map();
+    const domainCounters = new Map();
+    for (const x of activeOrdered) {
+      const d = domainOf(x);
+      const n = (domainCounters.get(d) || 0) + 1;
+      domainCounters.set(d, n);
+      domainOrderMap.set(x.id, n);
+    }
 
     let list = state.items.slice();
 
@@ -607,6 +684,7 @@
       list = list.filter((x) => x.deleted);
     } else {
       list = list.filter((x) => !x.deleted);
+      if (state.bankDomain) list = list.filter((x) => domainOf(x) === state.bankDomain);
       if (state.bankFilter === 'default') list = list.filter((x) => !x.edited && !isBlank(x));
       else if (state.bankFilter === 'edited') list = list.filter((x) => x.edited && !isBlank(x));
       else if (state.bankFilter === 'empty') list = list.filter((x) => isBlank(x));
@@ -617,7 +695,7 @@
     const kw = state.search.trim().toLowerCase();
     if (kw) {
       list = list.filter((x) =>
-        [x.q, (x.segments || []).join(' '), x.note || '']
+        [x.domain || '', x.q, (x.segments || []).join(' '), x.note || '']
           .join('\n')
           .toLowerCase()
           .includes(kw)
@@ -634,35 +712,44 @@
           : state.search
             ? '没有匹配的题目'
             : state.bankFilter === 'default'
-              ? '没有未修改的默认答案了'
+              ? '当前筛选下没有未修改的默认答案'
               : state.bankFilter === 'edited'
-                ? '还没有手动修改过的题目'
+                ? '当前筛选下还没有手动修改过的题目'
                 : state.bankFilter === 'empty'
                   ? '没有空白题，答案已全部补齐'
-                  : state.bankCat
-                    ? '这个类型下还没有题目'
+                  : state.bankCat || state.bankDomain
+                    ? '当前筛选下还没有题目'
                     : '还没有题目，点右上角「新建题目」或「批量导入」';
       el.bankList.innerHTML = `<div class="list-empty">${text}</div>`;
       return;
     }
 
+    // 「全部领域」下按领域分组展示，清晰隔开每个板块；点进具体领域或回收站时直接平铺。
+    if (state.bankFilter !== 'deleted' && !state.bankDomain) {
+      const domainOrder = domains().map(([name]) => name);
+      const grouped = new Map(domainOrder.map((d) => [d, []]));
+      for (const x of list) {
+        const d = domainOf(x);
+        if (!grouped.has(d)) grouped.set(d, []);
+        grouped.get(d).push(x);
+      }
+      const chunks = [];
+      for (const [d, rows] of grouped) {
+        if (!rows.length) continue;
+        chunks.push(
+          `<div class="domain-group-head">` +
+            `<span class="domain-group-name">${escapeHtml(d)}</span>` +
+            `<span class="domain-group-count">${rows.length} 题</span>` +
+          `</div>` +
+          rows.map((x, idx) => bankRowHtml(x, domainOrderMap.get(x.id) || idx + 1)).join('')
+        );
+      }
+      el.bankList.innerHTML = chunks.join('');
+      return;
+    }
+
     el.bankList.innerHTML = list
-      .map((x, idx) => {
-        const num = !x.deleted && orderMap.has(x.id) ? orderMap.get(x.id) : idx + 1;
-        const numStr = String(num).padStart(2, '0');
-        const hasNote = x.note && x.note.trim();
-        return `
-          <div class="q-row ${x.deleted ? 'is-deleted' : ''}" data-id="${x.id}">
-            <span class="q-row-idx">${numStr}</span>
-            <div class="q-row-title">${escapeHtml(x.q.replace(/\n+/g, ' '))}</div>
-            <div class="q-row-tags">
-              ${hasNote ? '<span class="has-note">备注</span>' : ''}
-              ${x.deleted ? '' : originBadgeHtml(x)}
-              <span class="c c${catIndex(x.cat)}">${escapeHtml(x.cat)}</span>
-              <span class="q-row-arrow" aria-hidden="true">›</span>
-            </div>
-          </div>`;
-      })
+      .map((x, idx) => bankRowHtml(x, !x.deleted && domainOrderMap.has(x.id) ? domainOrderMap.get(x.id) : idx + 1))
       .join('');
   }
 
@@ -670,6 +757,15 @@
     $$('[data-order]', el.orderChips).forEach((b) =>
       b.classList.toggle('is-active', b.dataset.order === state.filter.order)
     );
+
+    el.domainChips.innerHTML =
+      `<button class="chip ${state.filter.domain ? '' : 'is-active'}" data-fdomain="">不限</button>` +
+      domains()
+        .map(
+          ([name]) =>
+            `<button class="chip ${state.filter.domain === name ? 'is-active' : ''}" data-fdomain="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+        )
+        .join('');
 
     el.catChips.innerHTML =
       `<button class="chip ${state.filter.cat ? '' : 'is-active'}" data-fcat="">不限</button>` +
@@ -760,6 +856,7 @@
       el.posInfo.textContent = '';
       el.progressBar.style.width = '0';
       renderFilterState();
+      renderDomainTabs();
       renderCatFilter();
       renderBank();
     }
@@ -791,6 +888,8 @@
       el.drawerOrigin.hidden = true;
     }
     el.fQ.value = item ? item.q : '';
+    state.editDomain = item ? item.domain || '' : state.bankDomain && state.bankDomain !== '未分类' ? state.bankDomain : '';
+    el.fDomain.value = state.editDomain;
     el.fNote.value = item ? item.note || '' : '';
     state.editNote = el.fNote.value;
 
@@ -799,6 +898,7 @@
     state.editSegs = fitSegments(item ? item.segments : [], labelsOf({ cat: state.editCat }).length);
     state.editFu = item ? item.fu.map((f) => ({ ...f })) : [];
 
+    renderDomainPicker();
     renderCatPicker();
     renderFuEditor();
 
@@ -826,6 +926,18 @@
     state.editing = null;
     state.drawerDirty = false;
     return true;
+  }
+
+  function renderDomainPicker() {
+    const names = domains()
+      .map(([name]) => name)
+      .filter((n) => n !== '未分类');
+    el.domainPicker.innerHTML = names
+      .map(
+        (d) =>
+          `<button type="button" class="${d === state.editDomain ? 'is-on' : ''}" data-domain="${escapeHtml(d)}">${escapeHtml(d)}</button>`
+      )
+      .join('');
   }
 
   function renderCatPicker() {
@@ -919,6 +1031,7 @@
 
     const payload = {
       q,
+      domain: el.fDomain.value.trim(),
       cat: state.editCat,
       segments: segs,
       fu: state.editFu.filter((f) => f.q.trim()),
@@ -1000,18 +1113,21 @@
     };
 
     for (const raw of text.split(/\r?\n/)) {
-      const m = raw.match(/^\s*(Q|CAT|SUB|A|BRIEF|S|SEG|FU|NOTE|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
+      const m = raw.match(/^\s*(Q|DOMAIN|CAT|SUB|A|BRIEF|S|SEG|FU|NOTE|SRC|TAGS|SOURCE)\s*[:：]\s*(.*)$/i);
       if (m) {
         const key = m[1].toUpperCase();
         const val = m[2];
         if (key === 'Q') {
           flush();
-          cur = { q: val, cat: '', sub: '', segments: [], fu: [], note: '' };
+          cur = { q: val, domain: '', cat: '', sub: '', segments: [], fu: [], note: '' };
           field = 'q';
           continue;
         }
         if (!cur) continue;
-        if (key === 'CAT') {
+        if (key === 'DOMAIN') {
+          cur.domain = val.trim();
+          field = null;
+        } else if (key === 'CAT') {
           const parts = val.split(/[/／｜|>]/).map((s) => s.trim()).filter(Boolean);
           cur.cat = parts[0] || '';
           cur.sub = parts[1] || '';
@@ -1105,6 +1221,7 @@
         const cat = resolveCatId(p.cat, p.sub);
         const res = await api('/api/questions', {
           q: p.q,
+          domain: p.domain || (state.bankDomain && state.bankDomain !== '未分类' ? state.bankDomain : ''),
           cat,
           segments: p.segments,
           fu: p.fu,
@@ -1172,6 +1289,12 @@
       state.filter.order = b.dataset.order;
       renderFilterPopover();
     });
+    el.domainChips.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-fdomain]');
+      if (!b) return;
+      state.filter.domain = b.dataset.fdomain;
+      renderFilterPopover();
+    });
     el.catChips.addEventListener('click', (e) => {
       const b = e.target.closest('[data-fcat]');
       if (!b) return;
@@ -1179,7 +1302,7 @@
       renderFilterPopover();
     });
     $('#btnResetFilter').addEventListener('click', () => {
-      state.filter = { cat: '', order: 'seq' };
+      state.filter = { domain: '', cat: '', order: 'seq' };
       renderFilterPopover();
     });
     $('#btnApplyFilter').addEventListener('click', applyFilter);
@@ -1187,7 +1310,7 @@
     // 点顶部那个「只看 xxx ✕」就取消筛选，回到全部题目
     el.filterState.addEventListener('click', (e) => {
       if (!e.target.closest('[data-fclear]')) return;
-      state.filter = { ...state.filter, cat: '' };
+      state.filter = { ...state.filter, domain: '', cat: '' };
       renderFilterPopover();
       applyFilter();
     });
@@ -1199,6 +1322,18 @@
     });
 
     // 题库
+    el.domainTabs.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-bankdomain]');
+      if (!b) return;
+      state.bankDomain = b.dataset.bankdomain;
+      // 切领域时如果停在回收站，顺手切回「全部」，避免切完没反应
+      if (state.bankFilter === 'deleted') {
+        state.bankFilter = 'active';
+        $$('[data-bankfilter]').forEach((x) => x.classList.toggle('is-active', x.dataset.bankfilter === 'active'));
+      }
+      renderDomainTabs();
+      renderBank();
+    });
     $$('[data-bankfilter]').forEach((b) =>
       b.addEventListener('click', () => {
         state.bankFilter = b.dataset.bankfilter;
@@ -1233,6 +1368,19 @@
     el.drawer.addEventListener('input', (e) => {
       state.drawerDirty = true;
       autoGrow(e.target);
+    });
+
+    el.domainPicker.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-domain]');
+      if (!b) return;
+      state.editDomain = b.dataset.domain;
+      el.fDomain.value = state.editDomain;
+      state.drawerDirty = true;
+      renderDomainPicker();
+    });
+    el.fDomain.addEventListener('input', () => {
+      state.editDomain = el.fDomain.value.trim();
+      renderDomainPicker();
     });
 
     el.catPicker.addEventListener('click', (e) => {

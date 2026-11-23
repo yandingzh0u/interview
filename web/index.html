@@ -48,6 +48,10 @@
           </div>
         </div>
         <div class="pop-group">
+          <span class="pop-label">领域</span>
+          <div class="pop-chips" id="domainChips"></div>
+        </div>
+        <div class="pop-group">
           <span class="pop-label">答题类型</span>
           <div class="pop-chips" id="catChips"></div>
         </div>
@@ -103,6 +107,8 @@
       <button class="primary-btn" id="btnNew">新建题目</button>
     </div>
 
+    <div class="domain-tabs" id="domainTabs"></div>
+
     <div class="cat-filter" id="catFilter"></div>
 
     <div class="bank-panel">
@@ -133,6 +139,12 @@
       <span class="field-label">题目</span>
       <textarea id="fQ" rows="3" placeholder="面试官怎么问，就怎么写。可以换行"></textarea>
     </label>
+
+    <div class="field">
+      <span class="field-label">所属领域 <em>点选已有，或直接输入新领域</em></span>
+      <div class="picker" id="domainPicker"></div>
+      <input class="domain-input" id="fDomain" placeholder="例如：RAG、网络、消息队列、MySQL、Redis…" autocomplete="off">
+    </div>
 
     <div class="field">
       <span class="field-label">答题类型 <em>决定固定分段</em></span>
@@ -172,10 +184,11 @@
   <div class="modal-box">
     <h2 class="modal-title">批量导入</h2>
     <p class="modal-sub">
-      每条题以 <code>Q:</code> 开头，字段各占一行。<code>Q:</code> 必填，<code>CAT:</code> 建议填；答案用 <code>SEG:</code> 一行写一段，以后补也行。<br>
-      <code>CAT:</code> 填 7 套答题类型之一，比如 <code>问题解决</code>；追问用 <code>FU:</code>，提示用 <code>|</code> 隔开；备注用 <code>NOTE:</code>，可以接着写多行。
+      每条题以 <code>Q:</code> 开头，字段各占一行。<code>Q:</code> 必填，<code>DOMAIN:</code> 填领域（如 <code>MySQL</code>），<code>CAT:</code> 填 7 套答题类型之一；答案用 <code>SEG:</code> 一行写一段，以后补也行。<br>
+      追问用 <code>FU:</code>，提示用 <code>|</code> 隔开；备注用 <code>NOTE:</code>，可以接着写多行。
     </p>
     <textarea id="importText" rows="13" spellcheck="false" placeholder="Q: 如何规避 RAG 系统中大模型的幻觉？
+DOMAIN: RAG
 CAT: 问题解决
 SEG: RAG 里的幻觉主要有两类：一是检索没召回，二是召回了模型自行推断。
 SEG: 一是在 Rerank 后卡阈值，二是 Prompt 硬约束，三是要求带引用编号，四是生成后核查。

@@ -78,6 +78,7 @@ function normalize(o) {
   return {
     id: typeof o.id === 'string' && o.id ? o.id : newId(),
     q: typeof o.q === 'string' ? o.q : String(o.q ?? ''),
+    domain: typeof o.domain === 'string' ? o.domain.trim() : '',
     cat: typeof o.cat === 'string' && o.cat.trim() ? o.cat.trim() : defaultCat(),
     segments,
     fu,
@@ -399,6 +400,7 @@ const handler = async (req, res) => {
         item = normalize({
           ...prev,
           q,
+          domain: typeof body.domain === 'string' ? body.domain.trim() : prev.domain,
           cat: tag.cat,
           segments: body.segments ?? prev.segments,
           fu: body.fu ?? prev.fu,
@@ -415,6 +417,7 @@ const handler = async (req, res) => {
         if (!tag.ok) return json(res, 400, { error: tagError(tag) });
         item = normalize({
           q,
+          domain: typeof body.domain === 'string' ? body.domain.trim() : '',
           cat: tag.cat,
           segments: body.segments,
           fu: body.fu,
